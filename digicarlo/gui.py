@@ -20,6 +20,7 @@ import subprocess
 import sys
 import threading
 
+from PyQt6 import sip
 from PyQt6.QtCore import (QDateTime, QPoint, QPointF, QRect, QRectF, QSize,
                           Qt, QThread, QTimer, pyqtSignal)
 from PyQt6.QtGui import (QAction, QBrush, QColor, QConicalGradient, QFont,
@@ -1610,10 +1611,15 @@ class MainWindow(QWidget):
         self.later(0, self.startup)
 
     def later(self, ms, fn):
-        """A one-shot timer owned by the window, so it dies with it."""
+        """A one-shot timer owned by the window, and a no-op if the window
+        has gone by the time it fires."""
         t = QTimer(self)
         t.setSingleShot(True)
-        t.timeout.connect(fn)
+
+        def fire():
+            if not sip.isdeleted(self) and not sip.isdeleted(self.st_lib):
+                fn()
+        t.timeout.connect(fire)
         t.timeout.connect(t.deleteLater)
         t.start(ms)
 

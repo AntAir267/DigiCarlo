@@ -85,11 +85,14 @@ class Override:
             if self.when == "camera":
                 return "%s: camera's own dates" % what
             return "%s: from %s" % (what, fmt(self.when))
-        what = {"all": "everything",
-                "sessions": "S%d" % self.first if self.first == self.last
-                else "S%d-S%d" % (self.first, self.last),
-                "shots": "shot %d" % self.first if self.first == self.last
-                else "shots %d-%d" % (self.first, self.last)}[self.scope]
+        if self.scope == "all":
+            what = "everything"
+        elif self.scope == "sessions":
+            what = "S%d" % self.first if self.first == self.last \
+                else "S%d-S%d" % (self.first, self.last)
+        else:
+            what = "shot %d" % self.first if self.first == self.last \
+                else "shots %d-%d" % (self.first, self.last)
         if self.when == "camera":
             return "%s: camera's own dates" % what
         return "%s: from %s" % (what, fmt(self.when))

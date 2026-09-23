@@ -50,7 +50,11 @@ def make_jpeg(path, when=None, model="KODAK EASYSHARE C315 DIGITAL CAMERA",
     if model:
         exif[0x0110] = model
     if when:
-        exif.get_ifd(0x8769)[0x9003] = when.strftime("%Y:%m:%d %H:%M:%S")
+        stamp = when.strftime("%Y:%m:%d %H:%M:%S")
+        # IFD0 DateTime as well: older Pillow does not write a nested Exif
+        # IFD that was only filled in through get_ifd().
+        exif[0x0132] = stamp
+        exif.get_ifd(0x8769)[0x9003] = stamp
     img.save(path, exif=exif)
     if mtime is not None:
         os.utime(path, (mtime, mtime))
@@ -201,6 +205,13 @@ class PlanTests(unittest.TestCase):
     def test_camera_dates_kept(self):
         plan = self.build("S1=camera")
         self.assertEqual(plan.times["s1a"], D(2007, 1, 1, 12, 0, 9))
+
+    def test_every_kind_of_override_describes_itself(self):
+        for text in ("2026-09-12 19:00", "S2=camera", "S1-S2=now", "3=now",
+                     "2-4=2026-01-01"):
+            self.assertTrue(timeplan.parse_override(text).describe())
+        keys = timeplan.Override("keys", None, None, "camera", keys={"a"})
+        self.assertEqual(keys.describe(), "1 shot: camera's own dates")
 
     def test_later_override_wins(self):
         plan = self.build("2026-01-01 00:00", "S2=2026-02-01 00:00")
@@ -547,7 +558,8 @@ class SipixTests(TempDirs):
         self.assertEqual(info["DateTimeOriginal"], "2026:09:23 14:05:00")
         self.assertEqual(info["Model"], "StyleCam Blink II")
         from PIL import Image
-        self.assertEqual(Image.open(out).size, (640, 480))
+        with Image.open(out) as img:
+            self.assertEqual(img.size, (640, 480))
 
 
 # ---------------------------------------------------------------------------
