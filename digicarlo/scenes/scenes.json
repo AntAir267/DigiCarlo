@@ -178,336 +178,495 @@
   "background": "garage.jpg",
   "map": "garage-map.png"
  },
- "console-garage": {
+ "board": {
+  "size": [
+   2544,
+   1080
+  ],
+  "pieces": {
+   "trash": {
+    "file": "board-trash.png",
+    "at": [
+     1843,
+     656
+    ]
+   }
+  },
+  "hotspots": {
+   "1": {
+    "name": "stamp",
+    "glow": "board-glow-stamp.png",
+    "at": [
+     385,
+     681
+    ]
+   },
+   "2": {
+    "name": "clock",
+    "glow": "board-glow-clock.png",
+    "at": [
+     897,
+     672
+    ]
+   },
+   "3": {
+    "name": "eraser",
+    "glow": "board-glow-eraser.png",
+    "at": [
+     1366,
+     793
+    ]
+   },
+   "4": {
+    "name": "bin",
+    "glow": "board-glow-bin.png",
+    "at": [
+     1855,
+     667
+    ]
+   },
+   "5": {
+    "name": "pen",
+    "glow": "board-glow-pen.png",
+    "at": [
+     2083,
+     837
+    ]
+   },
+   "6": {
+    "name": "garage",
+    "glow": "board-glow-garage.png",
+    "at": [
+     80,
+     673
+    ]
+   }
+  },
+  "surfaces": {
+   "cork": {
+    "corners": [
+     [
+      118.3,
+      53.0
+     ],
+     [
+      2425.7,
+      53.0
+     ],
+     [
+      2418.8,
+      842.0
+     ],
+     [
+      125.2,
+      842.0
+     ]
+    ],
+    "size": [
+     1272,
+     436
+    ]
+   },
+   "stamp": {
+    "corners": [
+     [
+      480.9,
+      813.2
+     ],
+     [
+      596.6,
+      813.2
+     ],
+     [
+      596.9,
+      859.4
+     ],
+     [
+      481.1,
+      859.4
+     ]
+    ],
+    "size": [
+     300,
+     120
+    ]
+   }
+  },
+  "background": "board.jpg",
+  "map": "board-map.png"
+ },
+ "console": {
   "size": [
    2544,
    460
   ],
   "pieces": {
+   "board-dial": {
+    "file": "console-board-dial.png",
+    "at": [
+     942,
+     56
+    ]
+   },
    "key1": {
-    "file": "console-garage-key1.png",
+    "file": "console-key1.png",
+    "at": [
+     942,
+     56
+    ]
+   },
+   "board-key1": {
+    "file": "console-board-key1.png",
     "at": [
      942,
      56
     ]
    },
    "key2": {
-    "file": "console-garage-key2.png",
+    "file": "console-key2.png",
+    "at": [
+     942,
+     56
+    ]
+   },
+   "board-key2": {
+    "file": "console-board-key2.png",
     "at": [
      942,
      56
     ]
    },
    "key3": {
-    "file": "console-garage-key3.png",
+    "file": "console-key3.png",
+    "at": [
+     942,
+     56
+    ]
+   },
+   "board-key3": {
+    "file": "console-board-key3.png",
     "at": [
      942,
      56
     ]
    },
    "key4": {
-    "file": "console-garage-key4.png",
+    "file": "console-key4.png",
+    "at": [
+     942,
+     56
+    ]
+   },
+   "board-key4": {
+    "file": "console-board-key4.png",
     "at": [
      942,
      56
     ]
    },
    "key5": {
-    "file": "console-garage-key5.png",
+    "file": "console-key5.png",
+    "at": [
+     942,
+     56
+    ]
+   },
+   "board-key5": {
+    "file": "console-board-key5.png",
     "at": [
      942,
      56
     ]
    },
    "start": {
-    "file": "console-garage-start.png",
+    "file": "console-start.png",
     "at": [
      2180,
      0
     ]
    },
    "stop": {
-    "file": "console-garage-stop.png",
+    "file": "console-stop.png",
     "at": [
      2180,
      0
     ]
    },
    "drum0-0": {
-    "file": "console-garage-drum0-0.png",
+    "file": "console-drum0-0.png",
     "at": [
      1858,
      144
     ]
    },
    "drum1-0": {
-    "file": "console-garage-drum1-0.png",
+    "file": "console-drum1-0.png",
     "at": [
      1938,
      144
     ]
    },
    "drum2-0": {
-    "file": "console-garage-drum2-0.png",
+    "file": "console-drum2-0.png",
     "at": [
      2018,
      144
     ]
    },
    "drum3-0": {
-    "file": "console-garage-drum3-0.png",
+    "file": "console-drum3-0.png",
     "at": [
      2098,
      144
     ]
    },
    "drum0-1": {
-    "file": "console-garage-drum0-1.png",
+    "file": "console-drum0-1.png",
     "at": [
      1858,
      144
     ]
    },
    "drum1-1": {
-    "file": "console-garage-drum1-1.png",
+    "file": "console-drum1-1.png",
     "at": [
      1938,
      144
     ]
    },
    "drum2-1": {
-    "file": "console-garage-drum2-1.png",
+    "file": "console-drum2-1.png",
     "at": [
      2018,
      144
     ]
    },
    "drum3-1": {
-    "file": "console-garage-drum3-1.png",
+    "file": "console-drum3-1.png",
     "at": [
      2098,
      144
     ]
    },
    "drum0-2": {
-    "file": "console-garage-drum0-2.png",
+    "file": "console-drum0-2.png",
     "at": [
      1858,
      144
     ]
    },
    "drum1-2": {
-    "file": "console-garage-drum1-2.png",
+    "file": "console-drum1-2.png",
     "at": [
      1938,
      144
     ]
    },
    "drum2-2": {
-    "file": "console-garage-drum2-2.png",
+    "file": "console-drum2-2.png",
     "at": [
      2018,
      144
     ]
    },
    "drum3-2": {
-    "file": "console-garage-drum3-2.png",
+    "file": "console-drum3-2.png",
     "at": [
      2098,
      144
     ]
    },
    "drum0-3": {
-    "file": "console-garage-drum0-3.png",
+    "file": "console-drum0-3.png",
     "at": [
      1858,
      144
     ]
    },
    "drum1-3": {
-    "file": "console-garage-drum1-3.png",
+    "file": "console-drum1-3.png",
     "at": [
      1938,
      144
     ]
    },
    "drum2-3": {
-    "file": "console-garage-drum2-3.png",
+    "file": "console-drum2-3.png",
     "at": [
      2018,
      144
     ]
    },
    "drum3-3": {
-    "file": "console-garage-drum3-3.png",
+    "file": "console-drum3-3.png",
     "at": [
      2098,
      144
     ]
    },
    "drum0-4": {
-    "file": "console-garage-drum0-4.png",
+    "file": "console-drum0-4.png",
     "at": [
      1858,
      144
     ]
    },
    "drum1-4": {
-    "file": "console-garage-drum1-4.png",
+    "file": "console-drum1-4.png",
     "at": [
      1938,
      144
     ]
    },
    "drum2-4": {
-    "file": "console-garage-drum2-4.png",
+    "file": "console-drum2-4.png",
     "at": [
      2018,
      144
     ]
    },
    "drum3-4": {
-    "file": "console-garage-drum3-4.png",
+    "file": "console-drum3-4.png",
     "at": [
      2098,
      144
     ]
    },
    "drum0-5": {
-    "file": "console-garage-drum0-5.png",
+    "file": "console-drum0-5.png",
     "at": [
      1858,
      144
     ]
    },
    "drum1-5": {
-    "file": "console-garage-drum1-5.png",
+    "file": "console-drum1-5.png",
     "at": [
      1938,
      144
     ]
    },
    "drum2-5": {
-    "file": "console-garage-drum2-5.png",
+    "file": "console-drum2-5.png",
     "at": [
      2018,
      144
     ]
    },
    "drum3-5": {
-    "file": "console-garage-drum3-5.png",
+    "file": "console-drum3-5.png",
     "at": [
      2098,
      144
     ]
    },
    "drum0-6": {
-    "file": "console-garage-drum0-6.png",
+    "file": "console-drum0-6.png",
     "at": [
      1858,
      144
     ]
    },
    "drum1-6": {
-    "file": "console-garage-drum1-6.png",
+    "file": "console-drum1-6.png",
     "at": [
      1938,
      144
     ]
    },
    "drum2-6": {
-    "file": "console-garage-drum2-6.png",
+    "file": "console-drum2-6.png",
     "at": [
      2018,
      144
     ]
    },
    "drum3-6": {
-    "file": "console-garage-drum3-6.png",
+    "file": "console-drum3-6.png",
     "at": [
      2098,
      144
     ]
    },
    "drum0-7": {
-    "file": "console-garage-drum0-7.png",
+    "file": "console-drum0-7.png",
     "at": [
      1858,
      144
     ]
    },
    "drum1-7": {
-    "file": "console-garage-drum1-7.png",
+    "file": "console-drum1-7.png",
     "at": [
      1938,
      144
     ]
    },
    "drum2-7": {
-    "file": "console-garage-drum2-7.png",
+    "file": "console-drum2-7.png",
     "at": [
      2018,
      144
     ]
    },
    "drum3-7": {
-    "file": "console-garage-drum3-7.png",
+    "file": "console-drum3-7.png",
     "at": [
      2098,
      144
     ]
    },
    "drum0-8": {
-    "file": "console-garage-drum0-8.png",
+    "file": "console-drum0-8.png",
     "at": [
      1858,
      144
     ]
    },
    "drum1-8": {
-    "file": "console-garage-drum1-8.png",
+    "file": "console-drum1-8.png",
     "at": [
      1938,
      144
     ]
    },
    "drum2-8": {
-    "file": "console-garage-drum2-8.png",
+    "file": "console-drum2-8.png",
     "at": [
      2018,
      144
     ]
    },
    "drum3-8": {
-    "file": "console-garage-drum3-8.png",
+    "file": "console-drum3-8.png",
     "at": [
      2098,
      144
     ]
    },
    "drum0-9": {
-    "file": "console-garage-drum0-9.png",
+    "file": "console-drum0-9.png",
     "at": [
      1858,
      144
     ]
    },
    "drum1-9": {
-    "file": "console-garage-drum1-9.png",
+    "file": "console-drum1-9.png",
     "at": [
      1938,
      144
     ]
    },
    "drum2-9": {
-    "file": "console-garage-drum2-9.png",
+    "file": "console-drum2-9.png",
     "at": [
      2018,
      144
     ]
    },
    "drum3-9": {
-    "file": "console-garage-drum3-9.png",
+    "file": "console-drum3-9.png",
     "at": [
      2098,
      144
@@ -517,7 +676,7 @@
   "hotspots": {
    "1": {
     "name": "key1",
-    "glow": "console-garage-glow-key1.png",
+    "glow": "console-glow-key1.png",
     "at": [
      984,
      203
@@ -525,7 +684,7 @@
    },
    "2": {
     "name": "key2",
-    "glow": "console-garage-glow-key2.png",
+    "glow": "console-glow-key2.png",
     "at": [
      1120,
      203
@@ -533,7 +692,7 @@
    },
    "3": {
     "name": "key3",
-    "glow": "console-garage-glow-key3.png",
+    "glow": "console-glow-key3.png",
     "at": [
      1256,
      203
@@ -541,7 +700,7 @@
    },
    "4": {
     "name": "key4",
-    "glow": "console-garage-glow-key4.png",
+    "glow": "console-glow-key4.png",
     "at": [
      1392,
      203
@@ -549,7 +708,7 @@
    },
    "5": {
     "name": "key5",
-    "glow": "console-garage-glow-key5.png",
+    "glow": "console-glow-key5.png",
     "at": [
      1528,
      203
@@ -557,7 +716,7 @@
    },
    "6": {
     "name": "knob-left",
-    "glow": "console-garage-glow-knob-left.png",
+    "glow": "console-glow-knob-left.png",
     "at": [
      889,
      226
@@ -565,7 +724,7 @@
    },
    "7": {
     "name": "knob-right",
-    "glow": "console-garage-glow-knob-right.png",
+    "glow": "console-glow-knob-right.png",
     "at": [
      1657,
      226
@@ -573,7 +732,7 @@
    },
    "8": {
     "name": "start",
-    "glow": "console-garage-glow-start.png",
+    "glow": "console-glow-start.png",
     "at": [
      2236,
      50
@@ -581,7 +740,7 @@
    },
    "9": {
     "name": "screen",
-    "glow": "console-garage-glow-screen.png",
+    "glow": "console-glow-screen.png",
     "at": [
      60,
      59
@@ -589,7 +748,7 @@
    },
    "10": {
     "name": "counter",
-    "glow": "console-garage-glow-counter.png",
+    "glow": "console-glow-counter.png",
     "at": [
      1828,
      135
@@ -622,7 +781,15 @@
     ]
    }
   },
-  "background": "console-garage.jpg",
-  "map": "console-garage-map.png"
+  "background": "console.jpg",
+  "map": "console-map.png"
+ },
+ "sprites": {
+  "pin-red": "pin-red.png",
+  "pin-blue": "pin-blue.png",
+  "pin-yellow": "pin-yellow.png",
+  "pin-green": "pin-green.png",
+  "pin-purple": "pin-purple.png",
+  "clock-icon": "clock-icon.png"
  }
 }

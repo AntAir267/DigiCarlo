@@ -122,7 +122,7 @@ class GarageWindow(win95.Window):
         self.lay.addWidget(self._menus())
         self.room = Picture("garage")
         self.room.painter = self._paint_room
-        self.console = Picture("console-garage")
+        self.console = Picture("console")
         self.stage = Stage([self.room, self.console], self)
         self.stage.live = self._live
         self.stage.tip = self._tip

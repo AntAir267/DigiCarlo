@@ -1,8 +1,9 @@
 # Turn the renders in out/ into what the program ships, in
 # ../digicarlo/scenes/: each background, the pieces it swaps in (a card in
-# the reader, a key pushed in, a counter digit), a glow for every clickable
-# thing and a map saying which thing is where, and scenes.json saying where
-# each piece goes and where the program paints its own text.
+# the reader, a key pushed in, a counter digit, prints in the wastebasket),
+# a glow for every clickable thing and a map saying which thing is where, the
+# map pins and the dialog's clock, and scenes.json saying where each piece
+# goes and where the program paints its own text.
 #
 # The variants are rendered with the bounced light of one saved pass, so they
 # differ from the background only where something changed, give or take a
@@ -193,41 +194,79 @@ if CHECK:
     g.check("garage-card.png", gmap)
 
 # ---------------------------------------------------------------------------
+# The Photo Board
+# ---------------------------------------------------------------------------
+
+W, H = 2544, 1080
+b = Scene("board", (W, H))
+b.background("board.png")
+base = load("board.png")
+bmap = b.hotspots([(1, "stamp"), (2, "clock"), (3, "eraser"), (4, "bin"), (5, "pen"), (6, "garage")],
+                  "board-q.png", "board-q-hide%d.png")
+cam = Camera((0, 14, -760), (0, -2, 0), W, H, angle=49)
+b.add_piece("trash", *piece(load("board-trash.png"), base, grow(b.outlines["bin"], 24)))
+# the cork, where the program pins the shots, in half-centimetres; and the
+# stamp's rubber, where it shows the date it will stamp
+BX, BT, BB = 318, 132, -86
+b.surface("cork", face(cam, 2 * BX, BT - BB, 12, [("translate", (-BX, BB, 0))]), (4 * BX, 2 * (BT - BB)))
+b.surface("stamp", face(cam, 30, 12, -8.4, [("translate", (-190 - 15, BB - 12 + 14, -30))]), (300, 120))
+if CHECK:
+    b.check("board-trash.png", bmap)
+
+# ---------------------------------------------------------------------------
 # The console
 # ---------------------------------------------------------------------------
 
 W, H = 2544, 460
-c = Scene("console-garage", (W, H))
-c.background("console-garage.png")
-base = load("console-garage.png")
+c = Scene("console", (W, H))
+c.background("console.png")
+base = load("console.png")
 cmap = c.hotspots([(1, "key1"), (2, "key2"), (3, "key3"), (4, "key4"), (5, "key5"),
                    (6, "knob-left"), (7, "knob-right"), (8, "start"), (9, "screen"), (10, "counter")],
-                  "console-garage-q.png", "console-garage-q-hide%d.png")
+                  "console-q.png", "console-q-hide%d.png")
 cam = Camera((0, 150, -800), (0, 0, 0), W, H, ortho=(1272, 230))
-# a key pushed in lights its station on the dial and swings the needle there
+# a key pushed in lights its station on the dial and swings the needle there;
+# at the Photo Board the dial has the board's stations
 RC = 34
 dial = quad((W, H), face(cam, 380, 66, -21.5, [("translate", (RC - 190, 17, 0))]))
+c.add_piece("board-dial", *piece(load("console-board.png"), base, dial))
 for k in range(1, 6):
-    c.add_piece("key%d" % k, *piece(load("console-garage-key%d.png" % k), base,
-                                    union(grow(c.outlines["key%d" % k], 24), dial)))
+    around = union(grow(c.outlines["key%d" % k], 24), dial)
+    c.add_piece("key%d" % k, *piece(load("console-key%d.png" % k), base, around))
+    c.add_piece("board-key%d" % k, *piece(load("console-board-key%d.png" % k), base, around))
 lamp = grow(c.outlines["start"], 70)
-c.add_piece("start", *piece(load("console-garage-start.png"), base, lamp))
-c.add_piece("stop", *piece(load("console-garage-stop.png"), base, lamp))
+c.add_piece("start", *piece(load("console-start.png"), base, lamp))
+c.add_piece("stop", *piece(load("console-stop.png"), base, lamp))
 SX = -412
 c.surface("screen", face(cam, 358, 146, -1, [("translate", (SX - 179, -71, 0))]), (716, 292))
 # the counter's drums, each cut from the render showing that digit
 KX = 372
 for d in range(10):
-    img = Image.open(os.path.join(OUT, "console-garage.png" if d == 0 else
-                                  "console-garage-digit%d.png" % d)).convert("RGBA")
+    img = Image.open(os.path.join(OUT, "console.png" if d == 0 else
+                                  "console-digit%d.png" % d)).convert("RGBA")
     for i in range(4):
         x = KX - 60 + i * 40
         (x0, y0), (x1, y1) = cam.project((x - 19, 44, -4)), cam.project((x + 19, -12, -4))
         box = (int(x0), int(y0), int(x1 + 0.999), int(y1 + 0.999))
         c.add_piece("drum%d-%d" % (i, d), img.crop(box), box[:2])
 if CHECK:
-    c.check("console-garage.png", cmap)
+    c.check("console.png", cmap)
 
+# ---------------------------------------------------------------------------
+# Things drawn on their own: map pins and the dialog's alarm clock
+# ---------------------------------------------------------------------------
+
+sprites = {}
+for n, colour in enumerate(("red", "blue", "yellow", "green", "purple"), 1):
+    fn = "pin-%s.png" % colour
+    Image.open(os.path.join(OUT, "pin%d.png" % n)).save(os.path.join(DEST, fn), optimize=True)
+    sprites["pin-" + colour] = fn
+Image.open(os.path.join(OUT, "clock-icon.png")).save(os.path.join(DEST, "clock-icon.png"), optimize=True)
+sprites["clock-icon"] = "clock-icon.png"
+
+for old in os.listdir(DEST):             # what an earlier layout left behind
+    if old.startswith("console-garage"):
+        os.unlink(os.path.join(DEST, old))
 with open(os.path.join(DEST, "scenes.json"), "w") as fh:
-    json.dump({"garage": g.info, "console-garage": c.info}, fh, indent=1)
+    json.dump({"garage": g.info, "board": b.info, "console": c.info, "sprites": sprites}, fh, indent=1)
 print("assets ok: %s" % os.path.abspath(DEST))

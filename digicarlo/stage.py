@@ -1,9 +1,9 @@
 """The pre-rendered pictures, and the widget that shows them.
 
-Each picture (the garage, its console) is a background rendered in POV-Ray
-at twice the window's logical size, plus pieces rendered with the same light
-that the program switches on and off: a card in the reader, a radio key
-pushed in, a digit on the counter. A map says which clickable thing is under
+Each picture (the garage, the Photo Board, the console) is a background
+rendered in POV-Ray at twice the window's logical size, plus pieces rendered
+with the same light that the program switches on and off: a card in the
+reader, a radio key pushed in, a digit on the counter. A map says which clickable thing is under
 each pixel, and every clickable thing has a glow to screen over it while the
 mouse is on it. All of it is made by art/render.sh; scenes.json says where
 everything goes.
@@ -32,6 +32,12 @@ def catalogue():
         with open(os.path.join(SCENES, "scenes.json")) as fh:
             _catalogue = json.load(fh)
     return _catalogue
+
+
+def sprite(name):
+    """One of the things drawn on their own -- a map pin, the dialog's alarm
+    clock -- as an image at twice its logical size."""
+    return QImage(os.path.join(SCENES, catalogue()["sprites"][name]))
 
 
 def font(families, px, bold=False):
