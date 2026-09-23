@@ -1,0 +1,18 @@
+digicarlo (1.0.0-1) unstable; urgency=low
+
+  * First release.
+  * Pulls from memory cards (mounted read-only through udisks when the
+    desktop has not mounted them), PTP cameras through gphoto2, the SiPix
+    Blink II through Blinky 1.6.1's driver, and any folder.
+  * Every file is archived byte for byte and read back before it counts;
+    a file a failing card will not give up is reported and the rest carry on.
+  * Dates come from when the pictures came off the camera. Sessions are
+    found where the camera's clock was reset, the gaps within each are kept,
+    and any run of shots can be given its own start or keep the camera's
+    date.
+  * MOV, AVI and MTS clips are remuxed to MP4 with the video stream copied
+    bit for bit, checked by hashing it in both files; 8-bit PCM and other
+    audio MP4 cannot hold becomes AAC.
+  * digicarlo-gui: Windows 95 dressed as a Nash Metropolitan.
+
+ -- antair <antairdo@gmail.com>  Wed, 23 Sep 2026 12:00:00 +0000

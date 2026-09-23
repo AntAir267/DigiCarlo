@@ -1,0 +1,3 @@
+# SiPix StyleCam Blink II: give the logged-in user the raw USB device, so
+# DigiCarlo (and Blinky, if installed) can read it without root.
+SUBSYSTEM=="usb", ATTR{idVendor}=="0c77", ATTR{idProduct}=="1011", TAG+="uaccess"

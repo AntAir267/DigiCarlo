@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.1
+Name=DigiCarlo
+GenericName=Camera Importer
+Comment=Get the pictures off old digital cameras, with dates that are right
+Exec=digicarlo-gui
+Icon=digicarlo
+Terminal=false
+StartupNotify=true
+Categories=Graphics;Photography;
+Keywords=camera;import;photos;dcim;sd;card;kodak;sipix;date;exif;
+# Offered when a card with a DCIM folder is inserted, where the desktop asks.
+MimeType=x-content/image-dcf;

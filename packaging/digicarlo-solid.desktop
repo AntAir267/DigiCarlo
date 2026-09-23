@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Service
+X-KDE-Solid-Predicate=[ [ [ IS StorageAccess AND StorageVolume.ignored == false ] AND [ IS StorageVolume AND StorageVolume.usage == 'FileSystem' ] ] OR [ IS Camera AND Camera.supportedProtocols == 'ptp' ] ]
+Actions=digicarlo;
+X-KDE-Priority=TopLevel
+
+[Desktop Action digicarlo]
+Name=Import pictures with DigiCarlo
+Icon=digicarlo
+Exec=digicarlo-gui

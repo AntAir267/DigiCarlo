@@ -1,0 +1,11 @@
+#!/bin/sh
+# Run DigiCarlo from the source tree. Usage: ./digicarlo-dev [gui] ARGS...
+dir=$(dirname "$(readlink -f "$0")")
+export PYTHONPATH="$dir${PYTHONPATH:+:$PYTHONPATH}"
+py=python3
+[ -x "$dir/.venv/bin/python" ] && py="$dir/.venv/bin/python"
+if [ "$1" = gui ]; then
+    shift
+    exec "$py" -c 'import sys; from digicarlo.gui import main; sys.exit(main())' "$@"
+fi
+exec "$py" -m digicarlo "$@"

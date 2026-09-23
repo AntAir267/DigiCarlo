@@ -1,0 +1,36 @@
+_digicarlo() {
+    local cur prev cmds cmd i
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    cmds="import sources pull plan develop skip unskip remember doctor config update"
+
+    case "$prev" in
+        --from|--library|--archive) _filedir -d; return ;;
+        --date) COMPREPLY=( $(compgen -W "now today yesterday camera" -- "$cur") ); return ;;
+        --out) _filedir -d; return ;;
+    esac
+
+    cmd=""
+    for (( i=1; i < COMP_CWORD; i++ )); do
+        case "${COMP_WORDS[i]}" in
+            import|sources|pull|plan|develop|skip|unskip|remember|doctor|config|update)
+                cmd="${COMP_WORDS[i]}"; break ;;
+        esac
+    done
+
+    local common="-v --verbose -q --quiet --library --archive --help"
+    case "$cmd" in
+        "")       COMPREPLY=( $(compgen -W "$cmds --help --version" -- "$cur") ) ;;
+        import)   COMPREPLY=( $(compgen -W "$common --from --date --shots --yes" -- "$cur") ) ;;
+        pull)     COMPREPLY=( $(compgen -W "$common --from" -- "$cur") ) ;;
+        plan)     COMPREPLY=( $(compgen -W "$common --date --shots" -- "$cur") ) ;;
+        develop)  COMPREPLY=( $(compgen -W "$common --date --shots --yes" -- "$cur") ) ;;
+        remember) _filedir -d ;;
+        doctor)   COMPREPLY=( $(compgen -W "$common --sipix" -- "$cur") ) ;;
+        config)   COMPREPLY=( $(compgen -W "show set library archive max_gap_days session_spacing_seconds still_format jpeg_quality aac_bitrate" -- "$cur") ) ;;
+        update)   COMPREPLY=( $(compgen -W "$common --check --install --out" -- "$cur") ) ;;
+        *)        COMPREPLY=( $(compgen -W "$common" -- "$cur") ) ;;
+    esac
+}
+complete -F _digicarlo digicarlo
