@@ -1,0 +1,7 @@
+blinky.py in this directory is an unmodified copy of blinky.py from
+https://github.com/AntAir267/blinky at commit 1c37a57 (release v1.6.1).
+
+DigiCarlo uses it as a library -- the Blink2 driver, the still and clip
+decoders, and the atomic file writer -- and never runs its command line.
+To take a newer Blinky, copy its blinky.py over this one, update the commit
+above, and run the test suite.

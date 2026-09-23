@@ -1,0 +1,109 @@
+.TH DIGICARLO 1 "2026-09-23" "DigiCarlo 1.0.0" "User Commands"
+.SH NAME
+digicarlo \- get the pictures off old digital cameras, with dates that are right
+.SH SYNOPSIS
+.B digicarlo
+.I COMMAND
+[\fIOPTIONS\fR]
+.SH DESCRIPTION
+.B digicarlo
+takes pictures and clips off memory cards, USB cameras and the SiPix StyleCam
+Blink II, and dates them by when they came off the camera rather than by the
+camera's clock, keeping the gaps between shots that the clock still measures
+correctly.
+.PP
+Work happens in two steps. A \fIpull\fR copies every new file into the
+\fIarchive\fR, byte for byte, reading each copy back before it counts. To
+\fIdevelop\fR puts re-dated copies in the \fIlibrary\fR: EXIF and QuickTime
+dates set, and MOV, AVI and MTS clips remuxed to MP4 with the video stream
+copied untouched. \fBimport\fR does both, asking before it writes to the
+library.
+.SH COMMANDS
+.TP
+.B import \fR[\fISOURCE\fR...]
+Pull from every camera and card plugged in (or those named), show the dates
+waiting shots will get, and on a yes develop them.
+.TP
+.B sources
+List the cameras and cards plugged in, numbered for use as \fISOURCE\fR.
+.TP
+.B pull \fR[\fISOURCE\fR...]
+Copy new files into the archive only.
+.TP
+.B plan
+Show the sessions waiting shots fall into and the dates they would get.
+.TP
+.B develop
+Put waiting shots in the library.
+.TP
+.B skip \fISHOTS\fR...
+Leave shots out of the library (they stay in the archive).
+\fBunskip\fR [\fINAME\fR...] brings them back.
+.TP
+.B remember \fIDIR\fR...
+Record everything already in \fIDIR\fR so a pull never brings in a second copy.
+Useful once, on a library filled before DigiCarlo.
+.TP
+.B doctor
+Check the tools and folders DigiCarlo relies on, and what is plugged in. For
+the SiPix Blink II it also runs Blinky's link checks.
+.TP
+.B config \fR[\fBset\fR \fIKEY VALUE\fR]
+Show or change settings: \fBlibrary\fR, \fBarchive\fR, \fBmax_gap_days\fR,
+\fBsession_spacing_seconds\fR, \fBstill_format\fR, \fBjpeg_quality\fR,
+\fBaac_bitrate\fR.
+.TP
+.B update \fR[\fB\-\-check\fR] [\fB\-\-install\fR]
+Fetch a newer release from GitHub, verified against its published SHA256SUMS.
+.SH DATES
+A \fIsession\fR is a run of shots over which the camera's clock ran unbroken; a
+new one starts where the clock went backwards (a battery swap resetting it) or
+leapt forward more than \fBmax_gap_days\fR. By default a pull's last shot is
+dated when it came off the camera and sessions are stacked back from there,
+\fBsession_spacing_seconds\fR apart.
+.PP
+\fB\-\-date\fR changes that, and may be repeated; later ones win:
+.TP
+.B \-\-date \(dq2026-09-12 19:00\(dq
+Everything starts then.
+.TP
+.B \-\-date S2=\(dq2026-09-12 19:00\(dq
+Session 2 starts then. \fBS2-S4=\fR... runs sessions 2 to 4 one after another.
+.TP
+.B \-\-date 12-30=\(dqyesterday 18:00\(dq
+Shots 12 to 30 start then.
+.TP
+.B \-\-date S3=camera
+Keep the camera's own dates.
+.PP
+Times may be \fIYYYY-MM-DD HH:MM[:SS]\fR, a bare date (noon), \fBnow\fR,
+\fBtoday\fR or \fByesterday\fR with an optional time. Session and shot numbers
+are the ones \fBdigicarlo plan\fR prints.
+.SH OPTIONS
+.TP
+.B \-\-from \fIDIR\fR
+Pull from a folder as if it were a card.
+.TP
+.B \-\-library \fIDIR\fR, \fB\-\-archive \fIDIR\fR
+Override the folders from the settings for this run.
+.TP
+.B \-y\fR, \fB\-\-yes
+Do not ask before writing to the library.
+.TP
+.B \-\-shots
+List every shot in the plan, not just sessions.
+.TP
+.B \-v\fR, \fB\-\-verbose\fR; \fB\-q\fR, \fB\-\-quiet
+Say more, or less.
+.SH FILES
+.TP
+.I ~/.config/digicarlo/digicarlo.conf
+Settings.
+.TP
+.I ARCHIVE/manifest.jsonl
+What has been pulled and developed. Append-only JSON lines.
+.SH SEE ALSO
+.BR digicarlo-gui (1),
+.BR exiftool (1),
+.BR ffmpeg (1),
+.BR gphoto2 (1)
