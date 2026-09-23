@@ -443,7 +443,7 @@ def cmd_config(args, log, settings):
                    "max_gap_days": "dates",
                    "session_spacing_seconds": "dates",
                    "still_format": "sipix", "jpeg_quality": "sipix",
-                   "aac_bitrate": "video"}.get(key)
+                   "aac_bitrate": "video", "sounds": "window"}.get(key)
         if section is None:
             log.error("unknown setting %r" % key)
             return 1
@@ -460,6 +460,7 @@ def cmd_config(args, log, settings):
     log.out("  still_format (SiPix)     %s" % settings.sipix_format)
     log.out("  jpeg_quality (SiPix)     %d" % settings.jpeg_quality)
     log.out("  aac_bitrate              %s" % settings.aac_bitrate)
+    log.out("  sounds (window)          %s" % ("yes" if settings.sounds else "no"))
     return 0
 
 

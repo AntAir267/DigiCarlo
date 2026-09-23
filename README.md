@@ -22,7 +22,7 @@ of shots can be given a date of its own instead.
 
 ```bash
 ./packaging/build-deb.sh
-sudo apt install ./packaging/digicarlo_1.0.0-1_all.deb
+sudo apt install ./packaging/digicarlo_1.1.0-1_all.deb
 ```
 
 That brings in what it needs — `exiftool` to write dates, `ffmpeg` to remux
@@ -152,24 +152,37 @@ clock, so its shots are a second apart in the order it lists them.
 
 ## The window
 
-`digicarlo-gui` is Windows 95 dressed as a Nash Metropolitan.
+`digicarlo-gui` is a Windows 95 program that happens to be a cartoon car.
 
-From Windows 95: bevelled controls, classic scroll bars and menus (Qt's own
-"Windows" style, which is the real Win9x drawing code), Microsoft Sans Serif
-at 8 points without anti-aliasing, the caption buttons, the status bar and its
-size grip. From the Metropolitan, in moderation: two-tone paint, powder blue
-below and Snowberry white above; a chrome beltline under the title bar; the
-name in chrome script on the bodywork; and a dashboard with a chrome-bezelled
-speedometer showing how far a job has got, its odometer counting every file
-DigiCarlo has ever put in the library.
+The frame, menus and dialogs are Windows 95 (Qt's own "Windows" style, which
+is the real Win9x drawing code). Inside, it plays like a Humongous
+Entertainment game: the shots sit in a sunny landscape seen through the
+windshield, each pull under its own 1950s licence plate and each session
+under a signpost. Along the bottom is the dashboard of a Nash Metropolitan in
+its factory colours -- Caribbean Blue (PPG P-905 / Ditzler 41161) under a
+Snowberry White rail -- laid out the way Putt-Putt's dashboard carried his
+horn, radio and glove compartment:
 
-Like Blinky's window, everything is painted rather than themed, and the frame
-is drawn by the program, so moving and resizing are handed to the compositor
-(`startSystemMove`, `startSystemResize`) — the only way a window may move
-itself on Wayland.
+| On the dash | What it does |
+| --- | --- |
+| Glove box | Holds the cameras and cards plugged in; click one to pull it. The road map in there pulls from a folder |
+| Horn | Honks, and looks for cameras again |
+| Radio | Its dial says what is going on; its preset keys date the selected shots: **Set date**, **Camera**, **Auto**, **Leave out**. The left knob opens the activity log, the right one the folders |
+| Speedometer | How far the current job has got. The odometer counts every file DigiCarlo has ever put in the library |
+| Fuel gauge | Free space on the disk the library is on |
+| Clock | Now -- the time a pull's newest shot will be dated |
+| START | Puts the waiting shots in the library; while a job runs it says STOP |
 
-Cameras and cards appear on the left as they are plugged in; a camera being
-read is left alone until it is done.
+Select shots by clicking, shift-clicking, or clicking a session's signpost;
+right-click for the same choices. Sounds can be turned off under **View**.
+
+Everything is drawn with thick outlines and anti-aliased text, because the
+window is rendered at the screen's scale: on Wayland at 150% a hairline or an
+unsmoothed glyph comes out thin and broken. The UI font is Nunito (the
+`fonts-nunito` package, which the .deb recommends). Like Blinky's window, the
+frame is drawn by the program, so moving and resizing are handed to the
+compositor (`startSystemMove`, `startSystemResize`) -- the only way a window
+may move itself on Wayland.
 
 ## Commands
 

@@ -14,8 +14,9 @@ Modules:
     develop   re-dated, remuxed copies into the library folder
     cli       the digicarlo command
     gui       the digicarlo-gui window
+    cartoon   how the window is drawn: paint, type, scenery, the horn
     blinky    the SiPix Blink II driver, taken from Blinky (see BLINKY_SOURCE)
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 APP_NAME = "DigiCarlo"

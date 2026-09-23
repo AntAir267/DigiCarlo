@@ -1,3 +1,23 @@
+digicarlo (1.1.0-1) unstable; urgency=low
+
+  * The window is now a cartoon car. The shots sit in a landscape seen
+    through the windshield, and the controls live on the dashboard of a
+    Nash Metropolitan, the way Putt-Putt's did: the cameras and cards in
+    the glove box, a horn that honks and looks for cameras again, a radio
+    whose preset keys date the selected shots, a fuel gauge for free space,
+    a clock, and a big red START button.
+  * The paint is the Metropolitan's actual Caribbean Blue (PPG P-905,
+    Ditzler 41161), paired with Snowberry White, instead of a generic
+    powder blue.
+  * Text is anti-aliased and strokes are at least two pixels wide. The
+    unsmoothed 8-point font of 1.0 came out thin and broken on Wayland at
+    fractional scales such as 150%.
+  * The UI font is Nunito; fonts-nunito is now recommended.
+  * Sounds: the horn honks, and a finished job beeps twice. View > Sounds,
+    or 'digicarlo config set sounds no', turns them off.
+
+ -- antair <antairdo@gmail.com>  Wed, 23 Sep 2026 17:00:00 +0000
+
 digicarlo (1.0.0-1) unstable; urgency=low
 
   * First release.

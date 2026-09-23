@@ -39,6 +39,10 @@ DEFAULTS = {
         "still_format": "jpeg",
         "jpeg_quality": "95",
     },
+    "window": {
+        # The horn honks, and a job that finishes beeps twice.
+        "sounds": "yes",
+    },
     "video": {
         # Audio that MP4 cannot hold (8-bit PCM and the like) becomes AAC at
         # this rate; the video stream is always copied untouched.
@@ -81,6 +85,10 @@ class Settings:
     @property
     def jpeg_quality(self):
         return self.cp.getint("sipix", "jpeg_quality")
+
+    @property
+    def sounds(self):
+        return self.cp.getboolean("window", "sounds", fallback=True)
 
     @property
     def aac_bitrate(self):
