@@ -4,16 +4,29 @@
 // final image; the camera looks straight at the panel.
 
 #version 3.7;
-#ifndef (Rad) #declare Rad = 1; #end
-#ifndef (Lit) #declare Lit = 1; #end        // which button's lamp is on (0 = none)
+// What render.sh switches, to cut the pieces the program swaps in:
+#ifndef (Rad) #declare Rad = 1; #end        // bounced light
+#ifndef (Reuse) #declare Reuse = 0; #end    // bounced light from a saved file
 #ifndef (Mode) #declare Mode = 0; #end      // 0 the garage, 1 the photo board
+#ifndef (Lit) #declare Lit = 0; #end        // the radio key pushed in (0 = none)
+#ifndef (Go) #declare Go = 0; #end          // START: 0 resting, 1 lit, 2 lit as STOP
+#ifndef (Digit) #declare Digit = 0; #end    // what every counter drum shows
+#ifndef (Hide) #declare Hide = 0; #end      // leave out one clickable thing, to find its outline
+
+// Clickable things, numbered for Hide: keys 1-5, then these.
+#declare HotKnobL = 6; #declare HotKnobR = 7; #declare HotStart = 8;
+#declare HotScreen = 9; #declare HotCounter = 10;
+#macro Hot(N) #if (Hide = N) no_image #end #end
 
 global_settings {
   assumed_gamma 1.0
   max_trace_level 10
   #if (Rad)
-  radiosity { pretrace_start 0.08 pretrace_end 0.01 count 120 nearest_count 8 error_bound 0.7
-              recursion_limit 1 low_error_factor 0.5 gray_threshold 0 brightness 1 }
+  radiosity {
+    #if (Reuse) pretrace_start 1 pretrace_end 1 always_sample off
+    #else pretrace_start 0.08 pretrace_end 0.01 #end
+    count 120 nearest_count 8 error_bound 0.7
+    recursion_limit 1 low_error_factor 0.5 gray_threshold 0 brightness 1 }
   #end
 }
 
@@ -24,7 +37,7 @@ global_settings {
 
 camera { orthographic location <0, 150, -800> look_at <0, 0, 0> right x*1272 up y*230 }
 
-light_source { <-500, 700, -900> srgb <1, 0.96, 0.9>*1.1 area_light <200, 0, 0>, <0, 200, 0>, 4, 4 adaptive 1 jitter }
+light_source { <-500, 700, -900> srgb <1, 0.96, 0.9>*1.1 area_light <200, 0, 0>, <0, 200, 0>, 6, 6 adaptive 1 }
 light_source { <700, -200, -700> srgb <0.8, 0.88, 1.0>*0.35 shadowless }
 light_source { <0, 300, -300> srgb 0.25 shadowless }
 
@@ -76,7 +89,8 @@ difference {
 }
 box { <SX - 190, -82, 2>, <SX + 190, 86, 22> pigment { srgb 0.01 } }
 box { <SX - 179, -71, -1>, <SX + 179, 75, 0>
-  texture { pigment { srgb <0.05, 0.16, 0.09> } finish { ambient 0 emission 0.16 diffuse 0.2 specular 0.6 roughness 0.01 reflection 0.03 } } }
+  texture { pigment { srgb <0.05, 0.16, 0.09> } finish { ambient 0 emission 0.16 diffuse 0.2 specular 0.6 roughness 0.01 reflection 0.03 } }
+  Hot(HotScreen) }
 Screw(<SX - 194, 80, -18>) Screw(<SX + 194, 80, -18>) Screw(<SX - 194, -80, -18>) Screw(<SX + 194, -80, -18>)
 
 // ---------------------------------------------------------------------------
@@ -84,11 +98,10 @@ Screw(<SX - 194, 80, -18>) Screw(<SX + 194, 80, -18>) Screw(<SX - 194, -80, -18>
 // keys do; the chosen key stays pushed in and the needle swings to it.
 // ---------------------------------------------------------------------------
 
+#declare Digits = array[4] { str(Digit, 0, 0), str(Digit, 0, 0), str(Digit, 0, 0), str(Digit, 0, 0) }
 #if (Mode = 0)
-  #declare Digits = array[4] { "0", "1", "1", "8" }
   #declare DialFile = concat("tex/dial_garage_", str(Lit, 0, 0), ".png")
 #else
-  #declare Digits = array[4] { "0", "0", "1", "6" }
   #declare DialFile = concat("tex/dial_board_", str(Lit, 0, 0), ".png")
 #end
 #declare RC = 34;
@@ -121,9 +134,12 @@ box { <RC - 190, 17, -21.5>, <RC + 190, 83, -21>
   #local D = 26 - 16*Down;
   superellipsoid { <0.2, 0.2> scale <31, 32, 3> translate <X, -28, -17> texture { T_Chrome } }
   box { <X - 27, -58, -17.5>, <X + 27, 2, -16.5> pigment { srgb 0.02 } }
-  superellipsoid { <0.12, 0.12> scale <26, 29, D/2> translate <X, -28, -17 - D/2>
-                   texture { pigment { srgb <0.97, 0.93, 0.80> * (1 - 0.12*Down) } finish { ambient 0 diffuse 0.62 specular 0.8 roughness 0.004 reflection 0.05 } } }
-  box { <X - 26, -1, -17 - D - 0.6>, <X + 26, 2.5, -17 - D + 2> texture { T_Chrome } }
+  union {
+    superellipsoid { <0.12, 0.12> scale <26, 29, D/2> translate <X, -28, -17 - D/2>
+                     texture { pigment { srgb <0.97, 0.93, 0.80> * (1 - 0.12*Down) } finish { ambient 0 diffuse 0.62 specular 0.8 roughness 0.004 reflection 0.05 } } }
+    box { <X - 26, -1, -17 - D - 0.6>, <X + 26, 2.5, -17 - D + 2> texture { T_Chrome } }
+    Hot(I + 1)
+  }
   #if (Down)
     light_source { <X, -28, -40> srgb <1, 0.75, 0.3>*0.45 fade_distance 30 fade_power 2 }
   #end
@@ -138,6 +154,7 @@ box { <RC - 190, 17, -21.5>, <RC + 190, 83, -21>
     #end
     cylinder { <0, 0, -30>, <0, 0, -31>, 10 texture { T_Bakelite } }
     translate <RC + Sd*192, -28, 0>
+    #if (Sd < 0) Hot(HotKnobL) #else Hot(HotKnobR) #end
   }
 #end
 
@@ -157,21 +174,33 @@ difference {
   texture { T_Chrome }
 }
 box { <KX - 81, -11, 2>, <KX + 81, 43, 6> pigment { srgb 0.02 } }
-#for (I, 0, 3)
-  #local X = KX - 60 + I*40;
-  cylinder { <X - 18, 16, 30>, <X + 18, 16, 30>, 34
-             texture { pigment { srgb <0.93, 0.92, 0.88> * (I = 3) + <0.06, 0.06, 0.07> * (I < 3) } finish { ambient 0 diffuse 0.7 specular 0.4 roughness 0.02 } } }
-  Label(Digits[I], FontDigits, 44, <X, 16, -4.5>, texture { pigment { srgb <0.95, 0.94, 0.9> * (I < 3) + <0.08, 0.08, 0.09> * (I = 3) } finish { ambient 0 diffuse 0.7 } })
-#end
+union {
+  #for (I, 0, 3)
+    #local X = KX - 60 + I*40;
+    cylinder { <X - 18, 16, 30>, <X + 18, 16, 30>, 34
+               texture { pigment { srgb <0.93, 0.92, 0.88> * (I = 3) + <0.06, 0.06, 0.07> * (I < 3) } finish { ambient 0 diffuse 0.7 specular 0.4 roughness 0.02 } } }
+    Label(Digits[I], FontDigits, 44, <X, 16, -4.5>, texture { pigment { srgb <0.95, 0.94, 0.9> * (I < 3) + <0.08, 0.08, 0.09> * (I = 3) } finish { ambient 0 diffuse 0.7 } })
+  #end
+  Hot(HotCounter)
+}
 // the plate under it
 superellipsoid { <0.3, 0.3> scale <96, 15, 3> translate <KX, -56, -6> texture { T_Snow } }
 Label("SHOTS WAITING", FontNunito, 17, <KX, -56, -10>, T_Ink)
 
 #declare BX = 563;
-torus { 58, 7 rotate x*90 translate <BX, 12, -10> texture { T_Chrome } }
-cylinder { <BX, 12, -4>, <BX, 12, -12>, 56 texture { T_Chrome } }
-sphere { 0, 52 scale <1, 1, 0.38> translate <BX, 12, -12> texture { T_Red } }
-Label("START", FontCooper, 27, <BX, 12, -32>, texture { pigment { srgb <1, 0.97, 0.9> } finish { ambient 0 diffuse 0.8 } })
+// lit when there is something to put in the library; STOP while a job runs
+#if (Go = 2) #declare StartText = "STOP"; #else #declare StartText = "START"; #end
+#declare T_StartLabel = texture { pigment { srgb <1, 0.97, 0.9> } finish { ambient 0 diffuse 0.8 emission 0.25*(Go > 0) } }
+union {
+  torus { 58, 7 rotate x*90 translate <BX, 12, -10> texture { T_Chrome } }
+  cylinder { <BX, 12, -4>, <BX, 12, -12>, 56 texture { T_Chrome } }
+  sphere { 0, 52 scale <1, 1, 0.38> translate <BX, 12, -12>
+           texture { #if (Go) pigment { srgb <0.98, 0.22, 0.14> } finish { ambient 0 emission 0.42 diffuse 0.6 specular 0.8 roughness 0.004 reflection 0.08 }
+                     #else T_Red #end } }
+  Label(StartText, FontCooper, 27, <BX, 12, -32>, T_StartLabel)
+  Hot(HotStart)
+}
+#if (Go) light_source { <BX, 12, -60> srgb <1, 0.3, 0.2>*0.5 fade_distance 60 fade_power 2 } #end
 superellipsoid { <0.3, 0.3> scale <64, 13, 3> translate <BX - 4, -80, -6> texture { T_Snow } }
 Label("PUT IN LIBRARY", FontNunito, 12.5, <BX - 4, -80, -10>, T_Ink)
 Screw(<BX + 64, 94, -18>) Screw(<BX + 64, -94, -18>)

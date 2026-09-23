@@ -33,55 +33,31 @@ for n in range(8):
     d.text((W / 2, 252), random.choice(["8:54", "9:04", "9:07", "summer!", "Sep 23"]), font=font("hand", 24), fill=(29, 79, 154), anchor="mm")
     im.save(f"tex/snap{n}.png")
 
-# calendar page
+# calendar page, left blank: the program prints today's date on it
 im = Image.new("RGB", (400, 560), (252, 250, 244))
 d = ImageDraw.Draw(im)
 d.rectangle([0, 0, 400, 120], fill=(216, 50, 42))
-d.text((200, 62), "SEPTEMBER", font=font("cooper", 50), fill="white", anchor="mm")
-d.text((200, 300), "23", font=font("cooper", 250), fill=(40, 26, 18), anchor="mm")
-d.text((200, 490), "WEDNESDAY", font=font("nunito", 46), fill=(216, 50, 42), anchor="mm")
 for y in range(135, 150, 6):
     d.line([(20, y), (380, y)], fill=(230, 226, 214), width=2)
 im.save("tex/calendar.png")
 
-# sticky note
+# sticky note, blank: the program writes how many shots are waiting
 im = Image.new("RGB", (300, 300), (255, 238, 120))
-d = ImageDraw.Draw(im)
-d.text((150, 120), "118", font=font("hand", 88), fill=(40, 40, 50), anchor="mm")
-d.text((150, 220), "waiting!", font=font("hand", 52), fill=(192, 57, 43), anchor="mm")
 im.save("tex/sticky.png")
 
-# luggage tag on the card reader
+# luggage tag on the card reader, blank: the program writes how many are new
 im = Image.new("RGB", (360, 160), (255, 216, 58))
 d = ImageDraw.Draw(im)
 d.ellipse([18, 62, 50, 94], fill=(250, 250, 250), outline=(60, 40, 20), width=4)
-d.text((200, 80), "32 new!", font=font("hand", 62), fill=(40, 30, 20), anchor="mm")
 im.save("tex/tag.png")
 
-# SD card label
+# SD card, its label blank: the program writes the card's name
 im = Image.new("RGB", (240, 320), (30, 64, 132))
 d = ImageDraw.Draw(im)
 d.rounded_rectangle([20, 110, 220, 300], 16, fill=(244, 239, 225))
-d.text((120, 170), "KODAK", font=font("nunito", 50), fill=(216, 50, 42), anchor="mm")
-d.text((120, 240), "SD 512MB", font=font("nunito", 34), fill=(30, 64, 132), anchor="mm")
 for i in range(7):
     d.rectangle([22 + i * 28, 10, 38 + i * 28, 60], fill=(255, 205, 60))
 im.save("tex/sdcard.png")
-
-# the same card and tag, from the Polaroid
-im = Image.new("RGB", (240, 320), (30, 30, 34))
-d = ImageDraw.Draw(im)
-d.rounded_rectangle([20, 110, 220, 300], 16, fill=(244, 239, 225))
-d.text((120, 170), "POLAROID", font=font("nunito", 38), fill=(30, 110, 190), anchor="mm")
-d.text((120, 240), "SD 2GB", font=font("nunito", 34), fill=(40, 40, 44), anchor="mm")
-for i in range(7):
-    d.rectangle([22 + i * 28, 10, 38 + i * 28, 60], fill=(255, 205, 60))
-im.save("tex/sdcard_polaroid.png")
-im = Image.new("RGB", (360, 160), (255, 216, 58))
-d = ImageDraw.Draw(im)
-d.ellipse([18, 62, 50, 94], fill=(250, 250, 250), outline=(60, 40, 20), width=4)
-d.text((200, 80), "21 new!", font=font("hand", 62), fill=(40, 30, 20), anchor="mm")
-im.save("tex/tag_polaroid.png")
 
 # crate label
 im = Image.new("RGB", (480, 110), (250, 250, 246))

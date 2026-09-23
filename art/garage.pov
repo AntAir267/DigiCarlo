@@ -4,16 +4,29 @@
 
 #version 3.7;
 
-#ifndef (Rad) #declare Rad = 1; #end
-#ifndef (Area) #declare Area = 1; #end
-#ifndef (Card) #declare Card = 0; #end
+// What render.sh switches, to cut the pieces the program swaps in:
+#ifndef (Rad) #declare Rad = 1; #end          // bounced light
+#ifndef (Area) #declare Area = 1; #end        // soft shadows
+#ifndef (Reuse) #declare Reuse = 0; #end      // bounced light from a saved file
+#ifndef (Card) #declare Card = 1; #end        // a card in the reader
+#ifndef (Blink) #declare Blink = 1; #end      // the SiPix on the bench
+#ifndef (Safe) #declare Safe = 1; #end        // the darkroom's safelight on
+#ifndef (Hide) #declare Hide = 0; #end        // leave out one clickable thing, to find its outline
+
+// Clickable things, numbered for Hide; the program's hotspots follow these.
+#declare HotCard = 1; #declare HotBlink = 2; #declare HotDoor = 3;
+#declare HotBoard = 4; #declare HotCrate = 5; #declare HotCar = 6;
+#macro Hot(N) #if (Hide = N) no_image #end #end
 
 global_settings {
   assumed_gamma 1.0
   max_trace_level 10
   #if (Rad)
   radiosity {
-    pretrace_start 0.08 pretrace_end 0.008
+    // Reused, the bounced light is the same in every render, so the pieces
+    // cut from one fit the others without a seam.
+    #if (Reuse) pretrace_start 1 pretrace_end 1 always_sample off
+    #else pretrace_start 0.08 pretrace_end 0.008 #end
     count 180 nearest_count 10 error_bound 0.5
     recursion_limit 2 low_error_factor 0.5
     gray_threshold 0.0 minimum_reuse 0.015
@@ -84,7 +97,7 @@ camera {
 
 light_source {
   <25, 212, 250> srgb <1.0, 0.86, 0.66>*1.25
-  #if (Area) area_light <26, 0, 0>, <0, 0, 26>, 5, 5 adaptive 1 jitter circular orient #end
+  #if (Area) area_light <26, 0, 0>, <0, 0, 26>, 7, 7 adaptive 1 circular orient #end
   fade_distance 200 fade_power 1.4
 }
 light_source { <-30, 170, -140> srgb <0.9, 0.93, 1.0>*0.42 shadowless }
@@ -92,7 +105,7 @@ light_source { <220, 230, 120> srgb <1.0, 0.9, 0.75>*0.55 fade_distance 220 fade
 light_source {
   <-900, 900, 1500> srgb <1.0, 0.95, 0.85>*1.6 parallel point_at <-190, 0, 330>
 }
-light_source { <-27, 212, 388> srgb <1.0, 0.16, 0.08>*1.2 fade_distance 38 fade_power 2 }
+#if (Safe) light_source { <-27, 212, 388> srgb <1.0, 0.16, 0.08>*1.2 fade_distance 38 fade_power 2 } #end
 
 // The sky Windows 95 started with: blue, and fat white clouds.
 sky_sphere {
@@ -203,28 +216,41 @@ union {
 box { <-262, 68, 314.6>, <-136, 82.5, 316.2> texture { T_Snow } }
 text { ttf FontCooper "Pick-Up Bench" 0.05, 0 scale 12.5 translate <-257.5, 71, 314.4> texture { T_Red } }
 
-// a card reader, with the KODAK card in it
+// a card reader; its light is on when a card is in it
 superellipsoid { <0.25, 0.25> scale <17, 5, 10> translate <-244, 97, 352> texture { T_DarkPlastic } }
-sphere { <-231, 100, 342.3>, 1.3 texture { pigment { srgb <0.3, 1, 0.3> } finish { ambient 0 emission 1 } } }
-box {
-  <0, 0, -0.9>, <13, 18, 0.9>
-  texture { #if (Card = 1) Img("tex/sdcard_polaroid.png", 13, 18) #else Img("tex/sdcard.png", 13, 18) #end }
-  rotate x*-8 translate <-252, 99, 352>
-}
-// a luggage tag on a string
-cylinder { <-233, 101, 350>, <-214, 96, 344>, 0.25 texture { pigment { srgb 0.25 } } }
-box { <0, 0, -0.2>, <26, 11.5, 0.2> texture { #if (Card = 1) Img("tex/tag_polaroid.png", 26, 11.5) #else Img("tex/tag.png", 26, 11.5) #end } rotate z*8 rotate y*-12 translate <-214, 88, 343> }
-
-// the SiPix Blink II
+sphere { <-231, 100, 342.3>, 1.3
+         texture { #if (Card) pigment { srgb <0.3, 1, 0.3> } finish { ambient 0 emission 1 }
+                   #else pigment { srgb <0.10, 0.22, 0.12> } finish { ambient 0 diffuse 0.5 specular 0.8 roughness 0.005 } #end } }
+// the card, with a luggage tag on a string. The program writes the card's
+// name on its label and how many pictures are new on the tag.
+#if (Card)
 union {
-  superellipsoid { <0.4, 0.4> scale <14, 9, 7> texture { pigment { srgb <0.78, 0.76, 0.90> } finish { ambient 0 diffuse 0.6 specular 0.6 roughness 0.008 } } }
-  cylinder { <-3, 1, -6.5>, <-3, 1, -8.5>, 5.2 texture { T_Chrome } }
-  cylinder { <-3, 1, -8.4>, <-3, 1, -8.7>, 3.6 texture { pigment { srgb <0.06, 0.07, 0.10> } finish { ambient 0 specular 0.9 roughness 0.001 reflection 0.3 } } }
-  sphere { <8, 8.5, -2>, 2 texture { T_Red } }
-  translate <-160, 101, 352>
+  box {
+    <0, 0, -0.9>, <13, 18, 0.9>
+    texture { Img("tex/sdcard.png", 13, 18) }
+    rotate x*-8 translate <-252, 99, 352>
+  }
+  cylinder { <-233, 101, 350>, <-214, 96, 344>, 0.25 texture { pigment { srgb 0.25 } } }
+  box { <0, 0, -0.2>, <26, 11.5, 0.2> texture { Img("tex/tag.png", 26, 11.5) } rotate z*8 rotate y*-12 translate <-214, 88, 343> }
+  Hot(HotCard)
 }
-cylinder { <-146, 100, 352>, <-122, 92, 330>, 0.6 texture { T_Rubber } }
-cylinder { <-122, 92, 330>, <-110, 60, 316>, 0.6 texture { T_Rubber } }
+#end
+
+// the SiPix Blink II, on its cable
+#if (Blink)
+union {
+  union {
+    superellipsoid { <0.4, 0.4> scale <14, 9, 7> texture { pigment { srgb <0.78, 0.76, 0.90> } finish { ambient 0 diffuse 0.6 specular 0.6 roughness 0.008 } } }
+    cylinder { <-3, 1, -6.5>, <-3, 1, -8.5>, 5.2 texture { T_Chrome } }
+    cylinder { <-3, 1, -8.4>, <-3, 1, -8.7>, 3.6 texture { pigment { srgb <0.06, 0.07, 0.10> } finish { ambient 0 specular 0.9 roughness 0.001 reflection 0.3 } } }
+    sphere { <8, 8.5, -2>, 2 texture { T_Red } }
+    translate <-160, 101, 352>
+  }
+  cylinder { <-146, 100, 352>, <-122, 92, 330>, 0.6 texture { T_Rubber } }
+  cylinder { <-122, 92, 330>, <-110, 60, 316>, 0.6 texture { T_Rubber } }
+  Hot(HotBlink)
+}
+#end
 
 // a desk lamp at the end of the bench
 union {
@@ -256,6 +282,7 @@ union {
           texture { pigment { srgb Albums[I] } finish { ambient 0 diffuse 0.7 specular 0.3 } } }
   #end
   translate <-262, 0, 290>
+  Hot(HotCrate)
 }
 
 // ---------------------------------------------------------------------------
@@ -263,21 +290,28 @@ union {
 // ---------------------------------------------------------------------------
 
 union {
-  box { <-77, 0, 396>, <-70, 214, 401> }
-  box { <16, 0, 396>, <23, 214, 401> }
-  box { <-77, 206, 396>, <23, 214, 401> }
-  T_Plank(S, <0.88, 0.66, 0.43>, y*90)
+  union {
+    box { <-77, 0, 396>, <-70, 214, 401> }
+    box { <16, 0, 396>, <23, 214, 401> }
+    box { <-77, 206, 396>, <23, 214, 401> }
+    T_Plank(S, <0.88, 0.66, 0.43>, y*90)
+  }
+  box { <-69, 0, 402>, <15, 205, 405> texture { T_DoorPaint } }
+  box { <-60, 18, 401.2>, <6, 88, 402.2> texture { T_DoorPaint } }
+  box { <-60, 104, 401.2>, <6, 132, 402.2> texture { T_DoorPaint } }
+  box { <-58, 150, 400.6>, <4, 166, 402> texture { T_Red } }
+  text { ttf FontCooper "DARKROOM" 0.05, 0 scale 8.4 translate <-54.5, 154.5, 400.4> texture { T_White } }
+  box { <0, 0, -0.2>, <42, 16, 0.2> texture { Img("tex/develop.png", 42, 16) } rotate z*3 translate <-48, 133, 400.8> }
+  sphere { <7, 98, 400.2>, 3.2 texture { T_Brass } }
+  Hot(HotDoor)
 }
-box { <-69, 0, 402>, <15, 205, 405> texture { T_DoorPaint } }
-box { <-60, 18, 401.2>, <6, 88, 402.2> texture { T_DoorPaint } }
-box { <-60, 104, 401.2>, <6, 132, 402.2> texture { T_DoorPaint } }
-box { <-58, 150, 400.6>, <4, 166, 402> texture { T_Red } }
-text { ttf FontCooper "DARKROOM" 0.05, 0 scale 8.4 translate <-54.5, 154.5, 400.4> texture { T_White } }
-box { <0, 0, -0.2>, <42, 16, 0.2> texture { Img("tex/develop.png", 42, 16) } rotate z*3 translate <-48, 133, 400.8> }
-sphere { <7, 98, 400.2>, 3.2 texture { T_Brass } }
-// the safelight
+// the safelight: on while there are shots waiting to be developed
 box { <-36, 226, 391>, <-18, 231, 400> texture { T_DarkPlastic } }
+#if (Safe)
 sphere { <-27, 219, 392>, 7 texture { pigment { srgb <1, 0.2, 0.1> } finish { ambient 0 emission 0.95 diffuse 0.2 } } no_shadow }
+#else
+sphere { <-27, 219, 392>, 7 texture { pigment { srgbf <0.55, 0.12, 0.08, 0.3> } finish { ambient 0 emission 0.04 diffuse 0.4 specular 0.8 roughness 0.004 reflection 0.1 } } }
+#end
 torus { 7.2, 0.5 rotate x*90 translate <-27, 219, 392> texture { T_DarkPlastic } }
 torus { 7.2, 0.5 translate <-27, 219, 392> texture { T_DarkPlastic } }
 
@@ -286,6 +320,7 @@ torus { 7.2, 0.5 translate <-27, 219, 392> texture { T_DarkPlastic } }
 // ---------------------------------------------------------------------------
 
 #declare BX0 = 44; #declare BX1 = 220; #declare BY0 = 106; #declare BY1 = 230;
+union {
 union {
   box { <BX0, BY0, 392>, <BX1, BY0 + 8, 400> }
   box { <BX0, BY1 - 8, 392>, <BX1, BY1, 400> }
@@ -324,11 +359,15 @@ text {
   sphere { <Snap[I][0] + 12, Snap[I][1] + 27, 393.8>, 1.6
            texture { pigment { srgb Pins[mod(I, 4)] } finish { ambient 0 diffuse 0.6 specular 0.9 roughness 0.002 reflection 0.1 } } }
 #end
+// a sticky note: the program writes on it how many shots are waiting
 box { <0, 0, -0.2>, <27, 27, 0.2> texture { Img("tex/sticky.png", 27, 27) } rotate z*-5 translate <BX0 + 136, BY0 + 16, 395.3> }
 sphere { <BX0 + 150, BY0 + 42, 393.8>, 1.6 texture { T_Red } }
+Hot(HotBoard)
+}
 
 // ---------------------------------------------------------------------------
-// The calendar
+// The calendar: the program prints today on it, which is the date a pull's
+// newest shot gets
 // ---------------------------------------------------------------------------
 
 box { <0, 0, -0.3>, <42, 59, 0.3> texture { Img("tex/calendar.png", 42, 59) } translate <232, 150, 399.2> }
@@ -371,7 +410,7 @@ sphere { <253, 211, 399>, 1.2 texture { T_Chrome } }
     cylinder { <58, 31, Sd*66>, <58, 31, Sd*71.5>, 11 texture { T_Chrome } }
   #end
 }
-object { Car scale 0.92 rotate y*-28 translate <128, 0, 150> }
+object { Car scale 0.92 rotate y*-28 translate <128, 0, 150> Hot(HotCar) }
 
 // the pendant lamp
 cylinder { <25, 262, 250>, <25, 228, 250>, 0.5 texture { pigment { srgb 0.1 } } }
