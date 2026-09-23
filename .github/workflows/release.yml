@@ -41,6 +41,7 @@ jobs:
           python3 tests/test_digicarlo.py
           python3 tests/test_redeye.py
           python3 tests/test_gui.py
+          python3 tests/test_garage.py
 
       - name: Build the package
         run: ./packaging/build-deb.sh

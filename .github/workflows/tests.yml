@@ -44,7 +44,9 @@ jobs:
       - name: The window builds and draws offscreen
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python3 tests/test_gui.py
+        run: |
+          python3 tests/test_gui.py
+          python3 tests/test_garage.py
 
   package:
     runs-on: ubuntu-latest
