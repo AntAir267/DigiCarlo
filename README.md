@@ -202,6 +202,9 @@ frame is drawn by the program, so moving and resizing are handed to the
 compositor (`startSystemMove`, `startSystemResize`) -- the only way a window
 may move itself on Wayland.
 
+The next window, pre-rendered in POV-Ray like a 1995 CD-ROM game, is taking
+shape in [art/](art/README.md).
+
 ## Commands
 
 | Command | What it does |
