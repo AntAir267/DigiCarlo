@@ -72,7 +72,8 @@ d.text((170, 64), "develop me!", font=font("hand", 54), fill=(40, 30, 20), ancho
 im.save("tex/develop.png")
 
 # paper tags for the tools on the Photo Board's ledge, handwritten
-for name, text in (("t_stamp", "set a date"), ("t_clock", "camera's date"), ("t_eraser", "automatic"), ("t_bin", "leave out")):
+for name, text in (("t_stamp", "set a date"), ("t_clock", "camera's date"), ("t_eraser", "automatic"),
+                   ("t_bin", "leave out"), ("t_pen", "red eye")):
     im = Image.new("RGB", (340, 90), (251, 249, 242))
     d = ImageDraw.Draw(im)
     d.text((170, 44), text, font=font("hand", 44), fill=(40, 30, 20), anchor="mm")
