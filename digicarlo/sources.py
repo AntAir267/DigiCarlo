@@ -301,6 +301,24 @@ def list_media(root, exclude=()):
     return out
 
 
+def count_new(source, arc):
+    """(pictures and clips on a mounted card or folder, how many of them the
+    archive does not have yet), or None where that cannot be known without
+    mounting or talking to a camera."""
+    if source.kind not in ("volume", "folder") or not source.path \
+            or not os.path.isdir(source.path):
+        return None
+    files = list_media(source.path, exclude=[arc.root])
+    new = 0
+    for rel, path, size, mtime in files:
+        try:
+            if not arc.has(media.quick_fingerprint(path, size)):
+                new += 1
+        except OSError:
+            new += 1
+    return len(files), new
+
+
 def copy_verified(src, dst):
     """Copy a file, fsync it, read it back, and compare. Returns sha256.
 

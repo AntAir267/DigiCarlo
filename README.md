@@ -37,7 +37,7 @@ the download against the release's published `SHA256SUMS` before handing it
 to apt.
 
 To run from the source tree instead: `./digicarlo-dev` for the command,
-`./digicarlo-dev gui` for the window.
+`./digicarlo-dev gui` for the window, `./digicarlo-dev garage` for the garage.
 
 ## Where things go
 
@@ -202,8 +202,29 @@ frame is drawn by the program, so moving and resizing are handed to the
 compositor (`startSystemMove`, `startSystemResize`) -- the only way a window
 may move itself on Wayland.
 
-The next window, pre-rendered in POV-Ray like a 1995 CD-ROM game, is taking
-shape in [art/](art/README.md).
+### The garage (in progress)
+
+The next window is pre-rendered in POV-Ray, like a 1995 CD-ROM game, and can
+be tried with `digicarlo-gui --garage`. It is a garage: click the card in the
+reader or the camera on the bench to pull, the darkroom door (or START) to put
+the shots in the library, the crate of originals for the archive, the car to
+honk and look for cameras again. The calendar shows today, the date a pull's
+newest shot gets, and the safelight is on while shots are waiting.
+
+The console's radio keys do what has no place in the room:
+
+| Key | What it does |
+| --- | --- |
+| CHECK CARD | Reads every file on the card to its last byte, and looks in the kernel's log for read errors |
+| EJECT | Unmounts the card and powers off the reader, so it can be pulled out |
+| ERASE CARD | Empties the card for next time -- only when every file on it has a copy in the archive, compared byte for byte, and otherwise nothing |
+| SYNC | Asks Syncthing whether the phone is connected and how much of the library it has |
+| LIBRARY | Opens the library folder |
+
+After putting shots in the library it asks Syncthing to rescan the folder
+straight away. The Photo Board, for choosing dates, comes next; until then
+**View > Classic window** opens the window above. How the pictures are made
+is in [art/](art/README.md).
 
 ## Commands
 
@@ -225,11 +246,15 @@ shape in [art/](art/README.md).
 
 ```bash
 python3 tests/test_digicarlo.py
+python3 tests/test_redeye.py
+QT_QPA_PLATFORM=offscreen python3 tests/test_gui.py
+QT_QPA_PLATFORM=offscreen python3 tests/test_garage.py
 ```
 
 No camera is needed: cards are folders, the Blink II is Blinky's simulated
-camera, and clips are made with ffmpeg. Tests that write dates need exiftool
-and are skipped, with a reason, without it.
+camera, clips are made with ffmpeg, and Syncthing is a small local server
+answering as it would. Tests that write dates need exiftool and are skipped,
+with a reason, without it.
 
 ## Licence
 

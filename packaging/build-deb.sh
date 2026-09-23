@@ -31,6 +31,9 @@ install -m 644 "$src/digicarlo/BLINKY_SOURCE" "$pkgdir/"
 # The face finder red-eye removal runs on (YuNet, MIT licence).
 install -m 644 "$src/digicarlo/face_detection_yunet_2023mar.onnx" "$pkgdir/"
 install -m 644 "$src/digicarlo/YUNET_LICENSE" "$pkgdir/"
+# The garage window's pre-rendered pictures (made by art/render.sh).
+install -d "$pkgdir/scenes"
+install -m 644 "$src"/digicarlo/scenes/* "$pkgdir/scenes/"
 
 cat > "$build/usr/bin/digicarlo" <<'LAUNCH'
 #!/usr/bin/python3
@@ -91,7 +94,8 @@ Section: graphics
 Priority: optional
 Architecture: all
 Depends: python3 (>= 3.8), python3-pil, libimage-exiftool-perl, ffmpeg, udisks2
-Recommends: python3-pyqt6, python3-usb, gphoto2, fonts-nunito, python3-numpy
+Recommends: python3-pyqt6, python3-usb, gphoto2, fonts-nunito, python3-numpy,
+ fonts-glasstty, fonts-comic-neue
 Installed-Size: ${size}
 Maintainer: antair <antairdo@gmail.com>
 Description: get the pictures off old digital cameras, with dates that are right

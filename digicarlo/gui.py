@@ -29,7 +29,6 @@ import queue
 import shutil
 import subprocess
 import sys
-import threading
 
 from PyQt6 import sip
 from PyQt6.QtCore import (QDateTime, QPointF, QRect, QRectF, QSize, Qt,
@@ -49,6 +48,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from digicarlo import (__version__, archive, blinky, config,   # noqa: E402
                        develop, media, sources, timeplan, update)
 from digicarlo import cartoon as toon                           # noqa: E402
+from digicarlo.jobs import GuiLog, Job                          # noqa: E402
 from digicarlo.cartoon import (CARIBBEAN, GREY, INK, INK_SOFT,  # noqa: E402
                                MARDI_GRAS, OUTLINE, PAPER, SNOWBERRY,
                                SUNBURST, WOOD, app_icon, icon_pixmap)
@@ -1518,55 +1518,6 @@ class Windshield(QWidget):
 # Background work
 # ---------------------------------------------------------------------------
 
-class GuiLog(blinky.Log):
-    """The shared logger, rerouted into the window."""
-
-    def __init__(self, sink):
-        super().__init__(verbose=False, quiet=True)
-        self.sink = sink
-
-    def _emit(self, msg, stream=None):
-        self.sink("info", str(msg))
-
-    def out(self, msg=""):
-        self._record("OUT", msg)
-        if str(msg).strip():
-            self.sink("out", str(msg))
-
-    def warn(self, msg):
-        self._record("WARN", msg)
-        self.sink("warn", str(msg))
-
-    def error(self, msg):
-        self._record("ERROR", msg)
-        self.sink("error", str(msg))
-
-
-class Job(QThread):
-    line = pyqtSignal(str, str)
-    step = pyqtSignal(int, int, str)
-    ok = pyqtSignal(object)
-    failed = pyqtSignal(str)
-
-    def __init__(self, fn, parent=None):
-        super().__init__(parent)
-        self.fn = fn
-        self.cancel = threading.Event()
-
-    def progress(self, done, total, caption):
-        self.step.emit(int(done), int(total), str(caption))
-
-    def run(self):
-        log = GuiLog(self.line.emit)
-        try:
-            self.ok.emit(self.fn(self, log))
-        except Exception as exc:                      # never take the UI down
-            self.failed.emit(str(exc) if isinstance(
-                exc, (RuntimeError, OSError, blinky.CameraError,
-                      archive.ArchiveBusy)) else
-                "%s: %s" % (type(exc).__name__, exc))
-
-
 class ThumbLoader(QThread):
     """Makes thumbnails from the archive copies, newest request first."""
 
@@ -2608,7 +2559,12 @@ class MainWindow(QWidget):
 
 
 def main(argv=None):
-    app = QApplication(argv if argv is not None else sys.argv)
+    argv = list(argv if argv is not None else sys.argv)
+    if "--garage" in argv:
+        # The pre-rendered window, while it is being built.
+        from digicarlo import garage
+        return garage.main([a for a in argv if a != "--garage"])
+    app = QApplication(argv)
     app.setApplicationName("DigiCarlo")
     app.setApplicationDisplayName("DigiCarlo")
     app.setDesktopFileName("digicarlo")
