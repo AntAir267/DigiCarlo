@@ -1,108 +1,91 @@
 #!/usr/bin/env python3
 """digicarlo-gui - the DigiCarlo window.
 
-The look is Windows 95 dressed as a Nash Metropolitan. From Windows 95: the
-bevelled controls, the classic scroll bars and menus (Qt's own "Windows"
-style, which is the real Win9x drawing code), Microsoft Sans Serif at 8 points
-without anti-aliasing, and the caption buttons. From the Metropolitan, in
-moderation: two-tone paint -- powder blue below, Snowberry white above -- a
-chrome beltline under the title bar, and a dashboard with a speedometer whose
-odometer counts every photo DigiCarlo has ever brought in.
+A Windows 95 program that happens to be a cartoon car. The frame, the menus
+and the dialogs are Windows 95 (Qt's own "Windows" style is the real Win9x
+drawing code). Inside, it plays like a Humongous Entertainment game: the
+shots sit in a sunny landscape seen through the windshield, and everything
+you do is on the dashboard of a Caribbean Blue Nash Metropolitan, the way
+Putt-Putt's dashboard carried his horn, radio and glove compartment.
 
-All camera and file work happens in the other modules, on worker threads; this
-file only draws and dispatches.
+    glove box      the cameras and cards plugged in; click one to pull it
+    horn           honk to look for cameras again
+    radio          says what is going on; its preset keys date the shots
+                   you have selected
+    speedometer    how far the current job has got; the odometer counts
+                   every file ever put in the library
+    fuel gauge     free space where the library lives
+    clock          now, which is when a pull's newest shot will be dated
+    starter        puts the shots in the library (and stops a job)
+
+All camera and file work happens in the other modules, on worker threads;
+this file only draws and dispatches. The drawing helpers live in cartoon.py.
 """
 
+import datetime
 import math
 import os
 import queue
+import shutil
 import subprocess
 import sys
 import threading
 
 from PyQt6 import sip
-from PyQt6.QtCore import (QDateTime, QPoint, QPointF, QRect, QRectF, QSize,
-                          Qt, QThread, QTimer, pyqtSignal)
-from PyQt6.QtGui import (QAction, QBrush, QColor, QConicalGradient, QFont,
-                         QFontDatabase, QIcon, QImage, QImageReader,
-                         QLinearGradient, QPainter, QPainterPath, QPalette,
-                         QPen, QPixmap, QPolygonF, QRadialGradient)
+from PyQt6.QtCore import (QDateTime, QPointF, QRect, QRectF, QSize, Qt,
+                          QThread, QTimer, pyqtSignal)
+from PyQt6.QtGui import (QAction, QBrush, QColor, QFont, QIcon, QImage,
+                         QImageReader, QPainter, QPainterPath, QPalette, QPen,
+                         QPixmap, QPolygonF, QRadialGradient)
 from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QButtonGroup,
-                             QDateTimeEdit, QDialog, QFileDialog, QFrame,
-                             QHBoxLayout, QLabel, QLineEdit, QListView,
-                             QListWidget, QListWidgetItem, QMenu, QMenuBar,
-                             QPlainTextEdit, QPushButton, QRadioButton,
-                             QScrollArea, QSizePolicy, QStyle,
+                             QDateTimeEdit, QDialog, QFileDialog,
+                             QGridLayout, QHBoxLayout, QLabel, QLineEdit,
+                             QListView, QListWidget, QListWidgetItem, QMenu,
+                             QMenuBar, QPlainTextEdit, QPushButton,
+                             QRadioButton, QSizePolicy, QStyle,
                              QStyledItemDelegate, QVBoxLayout, QWidget)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from digicarlo import (__version__, archive, blinky, config,   # noqa: E402
                        develop, media, sources, timeplan, update)
+from digicarlo import cartoon as toon                           # noqa: E402
+from digicarlo.cartoon import (CARIBBEAN, GREY, INK, INK_SOFT,  # noqa: E402
+                               MARDI_GRAS, OUTLINE, PAPER, SNOWBERRY,
+                               SUNBURST, WOOD, app_icon, icon_pixmap)
 
-# ---------------------------------------------------------------------------
-# Palette
-#
-# Windows 95's grey (#C0C0C0) becomes Snowberry white, a warm cream; its
-# bevel shadows are warmed to match so the 3D still reads. Navy selection
-# becomes the Metropolitan's blue at its deepest. Paint gradients are kept
-# gentle: this is a 1995 program that happens to own a 1956 car.
-# ---------------------------------------------------------------------------
+THUMB_W, THUMB_H = 100, 75
+CELL_W, CELL_H = 128, 142
 
-CREAM = QColor("#ECE7DA")           # button face / window
-CREAM_LIGHT = QColor("#F7F4EC")     # inner highlight
+# Windows 95's bevel colours, warmed to sit next to Snowberry White.
+FACE = QColor(SNOWBERRY["base"])
+FACE_LIGHT = QColor(SNOWBERRY["light"])
 WHITE = QColor("#FFFFFF")
-SHADOW = QColor("#8E887A")          # inner shadow
-DARK = QColor("#23201B")            # outer shadow
-FIELD = QColor("#FFFFFF")
-INK = QColor("#1B1A17")
-INK_SOFT = QColor("#5E5A50")
-
-PAINT = ["#C3DDEF", "#9CC3DF", "#7FACCF", "#6497BF", "#4F83AE"]  # Metropolitan
-PAINT_DEEP = QColor("#2E5E8A")      # selection, primary button text shadow
-PAINT_INK = QColor("#244B70")
-CHROME = [(0.00, "#FFFFFF"), (0.30, "#E3E7EB"), (0.48, "#A2AAB2"),
-          (0.52, "#8A929B"), (0.70, "#D5DADF"), (1.00, "#F7F8FA")]
-NEEDLE = QColor("#D0402B")
-GOOD = QColor("#2F7D3B")
-BAD = QColor("#B3261E")
-
-THUMB_W, THUMB_H = 96, 72
-CELL_W, CELL_H = 116, 122
+SHADOW = QColor("#958C74")
+DARK = QColor("#2A2721")
 
 
-def ui_font(size=8, bold=False):
-    """MS Sans Serif's TrueType heir, unsmoothed, as Windows 95 drew it."""
-    for name in ("Microsoft Sans Serif", "MS Sans Serif", "Tahoma",
-                 "Liberation Sans", "DejaVu Sans"):
-        if name in QFontDatabase.families():
-            f = QFont(name)
-            f.setPointSizeF(size)
-            f.setBold(bold)
-            f.setStyleStrategy(QFont.StyleStrategy.NoAntialias)
-            f.setHintingPreference(QFont.HintingPreference.PreferFullHinting)
-            return f
-    f = QFont()
-    f.setPointSizeF(size)
-    f.setBold(bold)
-    return f
+def ui_font(size=9.0, bold=False):
+    return toon.body_font(size, QFont.Weight.Bold if bold
+                          else QFont.Weight.DemiBold)
 
 
 def win95_palette():
     pal = QPalette()
     for group in (QPalette.ColorGroup.Active, QPalette.ColorGroup.Inactive,
                   QPalette.ColorGroup.Disabled):
-        pal.setColor(group, QPalette.ColorRole.Window, CREAM)
-        pal.setColor(group, QPalette.ColorRole.Button, CREAM)
-        pal.setColor(group, QPalette.ColorRole.Base, FIELD)
-        pal.setColor(group, QPalette.ColorRole.AlternateBase, CREAM_LIGHT)
+        pal.setColor(group, QPalette.ColorRole.Window, FACE)
+        pal.setColor(group, QPalette.ColorRole.Button, FACE)
+        pal.setColor(group, QPalette.ColorRole.Base, PAPER)
+        pal.setColor(group, QPalette.ColorRole.AlternateBase, FACE_LIGHT)
         pal.setColor(group, QPalette.ColorRole.Light, WHITE)
-        pal.setColor(group, QPalette.ColorRole.Midlight, CREAM_LIGHT)
+        pal.setColor(group, QPalette.ColorRole.Midlight, FACE_LIGHT)
         pal.setColor(group, QPalette.ColorRole.Mid, SHADOW)
         pal.setColor(group, QPalette.ColorRole.Dark, SHADOW)
         pal.setColor(group, QPalette.ColorRole.Shadow, DARK)
-        pal.setColor(group, QPalette.ColorRole.Highlight, PAINT_DEEP)
+        pal.setColor(group, QPalette.ColorRole.Highlight,
+                     QColor(CARIBBEAN["deep"]))
         pal.setColor(group, QPalette.ColorRole.HighlightedText, WHITE)
-        pal.setColor(group, QPalette.ColorRole.ToolTipBase, QColor("#FFFFE1"))
+        pal.setColor(group, QPalette.ColorRole.ToolTipBase, QColor("#FFFBE0"))
         pal.setColor(group, QPalette.ColorRole.ToolTipText, INK)
         text = SHADOW if group == QPalette.ColorGroup.Disabled else INK
         for role in (QPalette.ColorRole.WindowText, QPalette.ColorRole.Text,
@@ -111,27 +94,13 @@ def win95_palette():
     return pal
 
 
-def vgrad(rect, stops):
-    g = QLinearGradient(QPointF(rect.left(), rect.top()),
-                        QPointF(rect.left(), rect.bottom()))
-    n = len(stops)
-    for i, s in enumerate(stops):
-        if isinstance(s, tuple):
-            g.setColorAt(s[0], QColor(s[1]))
-        else:
-            g.setColorAt(i / max(1, n - 1), QColor(s))
-    return g
-
-
-def bevel(p, rect, raised=True, deep=True):
+def bevel(p, rect, raised=True):
     """The Windows 95 two-pixel bevel, drawn inside rect."""
     r = QRect(rect)
     if raised:
-        outer_tl, outer_br, inner_tl, inner_br = CREAM_LIGHT, DARK, WHITE, SHADOW
+        rings = [(FACE_LIGHT, DARK), (WHITE, SHADOW)]
     else:
-        outer_tl, outer_br, inner_tl, inner_br = SHADOW, WHITE, DARK, CREAM_LIGHT
-    rings = [(outer_tl, outer_br), (inner_tl, inner_br)] if deep \
-        else [(inner_tl if raised else outer_tl, outer_br if raised else outer_br)]
+        rings = [(SHADOW, WHITE), (DARK, FACE_LIGHT)]
     for tl, br in rings:
         p.setPen(QPen(tl, 1))
         p.drawLine(r.left(), r.bottom() - 1, r.left(), r.top())
@@ -143,106 +112,26 @@ def bevel(p, rect, raised=True, deep=True):
     return r
 
 
-def chrome_strip(p, rect):
-    p.fillRect(rect, QBrush(vgrad(rect, CHROME)))
-    p.setPen(QPen(QColor(255, 255, 255, 200), 1))
-    p.drawLine(rect.left(), rect.top(), rect.right(), rect.top())
-    p.setPen(QPen(QColor(60, 66, 72, 160), 1))
-    p.drawLine(rect.left(), rect.bottom(), rect.right(), rect.bottom())
-
-
-def paint_panel(p, rect):
-    """Metropolitan paint: a soft vertical gloss, lighter at the shoulder."""
-    p.fillRect(rect, QBrush(vgrad(rect, [(0.0, PAINT[0]), (0.18, PAINT[1]),
-                                         (0.55, PAINT[2]), (1.0, PAINT[4])])))
+def aa(widget):
+    p = QPainter(widget)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+    p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+    return p
 
 
 # ---------------------------------------------------------------------------
-# The icon: a camera in two-tone paint, its lens a chrome-ringed headlight
-# ---------------------------------------------------------------------------
-
-def paint_icon(p, size):
-    s = size / 64.0
-    p.save()
-    p.setRenderHint(QPainter.RenderHint.Antialiasing, size >= 24)
-    p.scale(s, s)
-    outline = QPen(QColor("#1D2A36"), 2.0 if size >= 32 else 3.0)
-    body = QRectF(4, 16, 56, 38)
-    path = QPainterPath()
-    path.addRoundedRect(body, 9, 9)
-    # lower body: blue paint
-    p.setClipPath(path)
-    p.fillRect(QRectF(4, 16, 56, 38), QBrush(vgrad(QRectF(4, 30, 56, 24),
-                                                   [PAINT[1], PAINT[3]])))
-    # upper body: Snowberry white
-    p.fillRect(QRectF(4, 16, 56, 15), QColor("#F4F0E4"))
-    # chrome beltline
-    p.fillRect(QRectF(4, 30, 56, 3.5), QBrush(vgrad(QRectF(4, 30, 56, 3.5),
-                                                    CHROME)))
-    p.setClipping(False)
-    p.setPen(outline)
-    p.setBrush(Qt.BrushStyle.NoBrush)
-    p.drawPath(path)
-    # viewfinder hump and shutter button
-    p.setBrush(QColor("#F4F0E4"))
-    p.drawRoundedRect(QRectF(12, 9, 16, 9), 3, 3)
-    p.setBrush(QBrush(vgrad(QRectF(44, 10, 9, 7), CHROME)))
-    p.drawRoundedRect(QRectF(44, 11, 9, 6), 2, 2)
-    # the lens: a headlight in a chrome bezel
-    c = QPointF(33, 36)
-    g = QConicalGradient(c, 30)
-    for at, col in ((0.0, "#FFFFFF"), (0.25, "#8B939C"), (0.5, "#F2F4F6"),
-                    (0.75, "#7C858E"), (1.0, "#FFFFFF")):
-        g.setColorAt(at, QColor(col))
-    p.setBrush(QBrush(g))
-    p.drawEllipse(c, 14, 14)
-    if size >= 24:
-        lens = QRadialGradient(QPointF(29, 32), 12)
-        lens.setColorAt(0.0, QColor("#E8F4FF"))
-        lens.setColorAt(0.35, QColor("#5E8FB8"))
-        lens.setColorAt(1.0, QColor("#12293F"))
-        p.setBrush(QBrush(lens))
-        p.setPen(QPen(QColor("#1D2A36"), 1.5))
-        p.drawEllipse(c, 9, 9)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(255, 255, 255, 210))
-        p.drawEllipse(QPointF(29.5, 32.5), 2.6, 2.6)
-    else:
-        p.setBrush(QColor("#1E3D5C"))
-        p.drawEllipse(c, 8, 8)
-    p.restore()
-
-
-def icon_pixmap(size):
-    pm = QPixmap(size, size)
-    pm.fill(Qt.GlobalColor.transparent)
-    p = QPainter(pm)
-    paint_icon(p, size)
-    p.end()
-    return pm
-
-
-def app_icon():
-    icon = QIcon()
-    for size in (16, 24, 32, 48, 64, 128, 256):
-        icon.addPixmap(icon_pixmap(size))
-    return icon
-
-
-# ---------------------------------------------------------------------------
-# Window chrome
+# Window chrome: Windows 95, painted Caribbean Blue
 # ---------------------------------------------------------------------------
 
 class CaptionButton(QWidget):
-    """Windows 95's little bevelled minimise / maximise / close buttons."""
-
     clicked = pyqtSignal()
 
     def __init__(self, glyph, parent=None):
         super().__init__(parent)
         self.glyph = glyph
         self.down = False
-        self.setFixedSize(16, 14)
+        self.setFixedSize(20, 18)
 
     def mousePressEvent(self, e):
         if e.button() == Qt.MouseButton.LeftButton:
@@ -258,34 +147,28 @@ class CaptionButton(QWidget):
 
     def paintEvent(self, _):
         p = QPainter(self)
-        p.fillRect(self.rect(), CREAM)
+        p.fillRect(self.rect(), FACE)
         inner = bevel(p, self.rect(), raised=not self.down)
         o = 1 if self.down else 0
-        p.setPen(QPen(INK, 1))
-        p.setBrush(INK)
-        cx, cy = inner.center().x() + o, inner.center().y() + o
+        cx, cy = inner.center().x() + o + 1, inner.center().y() + o + 1
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(toon.pen(INK, 2.0))
+        p.setBrush(Qt.BrushStyle.NoBrush)
         if self.glyph == "close":
-            for d in (0, 1):
-                p.drawLine(cx - 3 + d, cy - 3, cx + 3 + d - 1, cy + 3)
-                p.drawLine(cx + 3 + d - 1, cy - 3, cx - 3 + d, cy + 3)
+            p.drawLine(QPointF(cx - 4, cy - 4), QPointF(cx + 4, cy + 4))
+            p.drawLine(QPointF(cx + 4, cy - 4), QPointF(cx - 4, cy + 4))
         elif self.glyph == "min":
-            p.fillRect(QRect(cx - 3, cy + 2, 6, 2), INK)
+            p.drawLine(QPointF(cx - 4, cy + 4), QPointF(cx + 3, cy + 4))
         elif self.glyph == "max":
-            p.setBrush(Qt.BrushStyle.NoBrush)
-            p.drawRect(QRect(cx - 4, cy - 4, 8, 7))
-            p.drawLine(cx - 4, cy - 3, cx + 4, cy - 3)
-        elif self.glyph == "restore":
-            p.setBrush(Qt.BrushStyle.NoBrush)
-            p.drawRect(QRect(cx - 2, cy - 4, 6, 5))
-            p.drawRect(QRect(cx - 4, cy - 1, 6, 5))
-            p.fillRect(QRect(cx - 3, cy, 5, 4), CREAM)
-            p.drawRect(QRect(cx - 4, cy - 1, 6, 5))
+            p.drawRect(QRectF(cx - 4.5, cy - 4.5, 9, 8))
+            p.drawLine(QPointF(cx - 4.5, cy - 3.5), QPointF(cx + 4.5, cy - 3.5))
+        else:
+            p.drawRect(QRectF(cx - 2, cy - 5, 7, 6))
+            p.fillRect(QRectF(cx - 5, cy - 1, 7, 6), FACE)
+            p.drawRect(QRectF(cx - 5, cy - 1, 7, 6))
 
 
 class TitleBar(QWidget):
-    """Metropolitan blue with a gloss, a chrome beltline beneath, and the
-    Windows 95 caption: icon at left, bold white title, buttons at right."""
-
     close_clicked = pyqtSignal()
     minimise_clicked = pyqtSignal()
     zoom_clicked = pyqtSignal()
@@ -294,26 +177,24 @@ class TitleBar(QWidget):
         super().__init__(parent)
         self.text = text
         self.active = True
-        self.setFixedHeight(24)
+        self.setFixedHeight(30)
         self._drag = None
         row = QHBoxLayout(self)
-        row.setContentsMargins(4, 3, 4, 7)
+        row.setContentsMargins(4, 3, 5, 8)
         row.setSpacing(0)
-        row.addSpacing(20)
         row.addStretch(1)
         self.buttons = {}
         for g in buttons:
             b = CaptionButton(g, self)
             self.buttons[g] = b
             if g == "close" and len(buttons) > 1:
-                row.addSpacing(2)
+                row.addSpacing(3)
             row.addWidget(b, 0, Qt.AlignmentFlag.AlignVCenter)
-        if "close" in self.buttons:
-            self.buttons["close"].clicked.connect(self.close_clicked)
-        if "min" in self.buttons:
-            self.buttons["min"].clicked.connect(self.minimise_clicked)
-        if "max" in self.buttons:
-            self.buttons["max"].clicked.connect(self.zoom_clicked)
+        for g, sig in (("close", self.close_clicked),
+                       ("min", self.minimise_clicked),
+                       ("max", self.zoom_clicked)):
+            if g in self.buttons:
+                self.buttons[g].clicked.connect(sig)
 
     def set_active(self, on):
         self.active = on
@@ -348,37 +229,37 @@ class TitleBar(QWidget):
         self._drag = None
 
     def paintEvent(self, _):
-        p = QPainter(self)
-        r = self.rect()
-        paint_rect = QRect(r.left(), r.top(), r.width(), r.height() - 4)
-        if self.active:
-            paint_panel(p, paint_rect)
-            # a highlight line along the top, like light on a curved roof
-            p.setPen(QPen(QColor(255, 255, 255, 150), 1))
-            p.drawLine(paint_rect.left(), paint_rect.top() + 1,
-                       paint_rect.right(), paint_rect.top() + 1)
-        else:
-            p.fillRect(paint_rect, QBrush(vgrad(paint_rect,
-                                                ["#C9CCCF", "#A8ADB2"])))
-        chrome_strip(p, QRect(r.left(), r.bottom() - 3, r.width(), 4))
-        p.drawPixmap(4, (paint_rect.height() - 16) // 2, icon_pixmap(16))
-        p.setFont(ui_font(8, bold=True))
-        text_rect = QRect(24, 0, r.width() - 90, paint_rect.height())
-        p.setPen(QColor(20, 40, 60, 120) if self.active else QColor(0, 0, 0, 0))
-        p.drawText(text_rect.translated(1, 1),
-                   Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
-                   self.text)
-        p.setPen(WHITE if self.active else QColor("#EEF0F2"))
-        p.drawText(text_rect, Qt.AlignmentFlag.AlignVCenter |
-                   Qt.AlignmentFlag.AlignLeft, self.text)
+        p = aa(self)
+        r = QRectF(self.rect())
+        body = QRectF(r.left(), r.top(), r.width(), r.height() - 5)
+        tone = CARIBBEAN if self.active else GREY
+        p.fillRect(body, QBrush(toon.vgrad(body, [(0.0, tone["light"]),
+                                                  (0.5, tone["base"]),
+                                                  (1.0, tone["shade"])])))
+        p.fillRect(QRectF(body.left(), body.top() + 2, body.width(),
+                          body.height() * 0.35),
+                   QBrush(toon.vgrad(QRectF(0, 2, 1, body.height() * 0.35),
+                                     [QColor(255, 255, 255, 90),
+                                      QColor(255, 255, 255, 0)])))
+        strip = QRectF(r.left(), r.bottom() - 5, r.width(), 5)
+        p.fillRect(strip, toon.chrome_brush(strip))
+        p.setPen(toon.pen(OUTLINE, 1.5))
+        p.drawLine(QPointF(r.left(), r.bottom() - 0.75),
+                   QPointF(r.right(), r.bottom() - 0.75))
+        p.drawPixmap(QRectF(5, (body.height() - 20) / 2, 20, 20),
+                     icon_pixmap(40), QRectF(0, 0, 40, 40))
+        toon.outlined_text(p, QRectF(31, 0, r.width() - 120, body.height()),
+                           Qt.AlignmentFlag.AlignVCenter |
+                           Qt.AlignmentFlag.AlignLeft, self.text,
+                           toon.display_font(10.5),
+                           WHITE if self.active else QColor("#F2F4F5"),
+                           OUTLINE, 2.6)
 
 
 class SizeGrip(QWidget):
-    """The diagonal ridges in the corner of a Windows 95 status bar."""
-
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(14, 14)
+        self.setFixedSize(16, 16)
         self.setCursor(Qt.CursorShape.SizeFDiagCursor)
 
     def mousePressEvent(self, e):
@@ -388,41 +269,23 @@ class SizeGrip(QWidget):
                 handle.startSystemResize(Qt.Edge.BottomEdge | Qt.Edge.RightEdge)
 
     def paintEvent(self, _):
-        p = QPainter(self)
+        p = aa(self)
         w, h = self.width(), self.height()
-        for off in (3, 7, 11):
-            p.setPen(QPen(WHITE, 1))
-            p.drawLine(w - off - 1, h - 1, w - 1, h - off - 1)
-            p.setPen(QPen(SHADOW, 1))
-            p.drawLine(w - off, h - 1, w - 1, h - off)
-            p.drawLine(w - off + 1, h - 1, w - 1, h - off + 1)
-
-
-class Sunken(QFrame):
-    """A Windows 95 sunken field around another widget."""
-
-    def __init__(self, child=None, parent=None, margin=2):
-        super().__init__(parent)
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(margin, margin, margin, margin)
-        lay.setSpacing(0)
-        if child is not None:
-            lay.addWidget(child)
-
-    def paintEvent(self, _):
-        p = QPainter(self)
-        bevel(p, self.rect(), raised=False)
+        for off in (4, 8, 12):
+            p.setPen(QPen(WHITE, 1.5))
+            p.drawLine(QPointF(w - off - 1, h - 1), QPointF(w - 1, h - off - 1))
+            p.setPen(QPen(SHADOW, 1.5))
+            p.drawLine(QPointF(w - off + 0.5, h - 1), QPointF(w - 1, h - off + 0.5))
 
 
 class StatusPanel(QLabel):
-    """One shallow-sunken compartment of the status bar."""
-
     clicked = pyqtSignal()
 
     def __init__(self, text="", parent=None):
         super().__init__(text, parent)
-        self.setContentsMargins(4, 1, 4, 1)
+        self.setContentsMargins(6, 1, 6, 1)
         self.setMinimumWidth(60)
+        self.setFont(ui_font(8.5))
         self._full = text
 
     def setText(self, text):
@@ -431,7 +294,7 @@ class StatusPanel(QLabel):
 
     def _apply(self):
         shown = self.fontMetrics().elidedText(
-            self._full, Qt.TextElideMode.ElideMiddle, max(20, self.width() - 10))
+            self._full, Qt.TextElideMode.ElideMiddle, max(20, self.width() - 14))
         super().setText(shown)
         self.setToolTip(self._full if shown != self._full else "")
 
@@ -460,173 +323,16 @@ class StatusPanel(QLabel):
 # The dashboard
 # ---------------------------------------------------------------------------
 
-class Speedometer(QWidget):
-    """A Metropolitan-style dial reading percent done, with an odometer
-    window below the hub counting every photo DigiCarlo has brought in."""
-
-    SWEEP = 220.0
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setFixedSize(150, 150)
-        self.value = 0.0
-        self.target = 0.0
-        self.odometer = 0
-        self.lit = False
-        self._timer = QTimer(self)
-        self._timer.setInterval(30)
-        self._timer.timeout.connect(self._step)
-
-    def set_value(self, frac):
-        self.target = max(0.0, min(1.0, frac))
-        if not self._timer.isActive():
-            self._timer.start()
-
-    def set_odometer(self, n):
-        self.odometer = n
-        self.update()
-
-    def set_lit(self, on):
-        self.lit = on
-        self.update()
-
-    def _step(self):
-        # The needle eases toward its reading rather than jumping to it.
-        d = self.target - self.value
-        if abs(d) < 0.002:
-            self.value = self.target
-            self._timer.stop()
-        else:
-            self.value += d * 0.22
-        self.update()
-
-    def paintEvent(self, _):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        side = min(self.width(), self.height())
-        c = QPointF(self.width() / 2, self.height() / 2)
-        R = side / 2 - 2
-
-        # chrome bezel
-        g = QConicalGradient(c, 45)
-        for at, col in ((0.0, "#FFFFFF"), (0.2, "#9BA3AC"), (0.45, "#F4F6F8"),
-                        (0.7, "#7E8790"), (1.0, "#FFFFFF")):
-            g.setColorAt(at, QColor(col))
-        p.setPen(QPen(QColor("#3A4048"), 1.2))
-        p.setBrush(QBrush(g))
-        p.drawEllipse(c, R, R)
-
-        # the face: cream, faintly domed
-        face = QRadialGradient(QPointF(c.x() - R * 0.25, c.y() - R * 0.3), R * 1.3)
-        face.setColorAt(0.0, QColor("#FFFDF6") if not self.lit else QColor("#FFFBEA"))
-        face.setColorAt(1.0, QColor("#E3DCC8") if not self.lit else QColor("#EFE3BE"))
-        p.setPen(QPen(QColor("#5B6168"), 1))
-        p.setBrush(QBrush(face))
-        rf = R - 8
-        p.drawEllipse(c, rf, rf)
-
-        start = 90 + self.SWEEP / 2      # degrees, 0 at 3 o'clock, CCW
-
-        def at(frac, radius):
-            ang = math.radians(start - frac * self.SWEEP)
-            return QPointF(c.x() + radius * math.cos(ang),
-                           c.y() - radius * math.sin(ang))
-
-        # ticks and numerals
-        for i in range(0, 21):
-            frac = i / 20.0
-            major = i % 4 == 0
-            p.setPen(QPen(PAINT_INK, 2.0 if major else 1.0))
-            p.drawLine(at(frac, rf - 3), at(frac, rf - (11 if major else 7)))
-        num_font = ui_font(7, bold=True)
-        num_font.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
-        p.setFont(num_font)
-        p.setPen(PAINT_INK)
-        for i in range(0, 6):
-            frac = i / 5.0
-            pt = at(frac, rf - 21)
-            p.drawText(QRectF(pt.x() - 14, pt.y() - 7, 28, 14),
-                       Qt.AlignmentFlag.AlignCenter, str(i * 20))
-
-        label_font = ui_font(6)
-        label_font.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
-        p.setFont(label_font)
-        p.setPen(QColor("#6B6453"))
-        p.drawText(QRectF(c.x() - 30, c.y() - rf * 0.36, 60, 12),
-                   Qt.AlignmentFlag.AlignCenter, "PERCENT")
-
-        # odometer window
-        digits = "%06d" % (self.odometer % 1000000)
-        dw, dh = 9, 13
-        ow = dw * len(digits) + 4
-        orect = QRectF(c.x() - ow / 2, c.y() + rf * 0.40, ow, dh + 4)
-        p.setPen(QPen(QColor("#3A3A3A"), 1))
-        p.setBrush(QColor("#1A1A1A"))
-        p.drawRect(orect)
-        odo = ui_font(7, bold=True)
-        odo.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
-        p.setFont(odo)
-        for i, ch in enumerate(digits):
-            cell = QRectF(orect.left() + 2 + i * dw, orect.top() + 2, dw - 1, dh)
-            last = i == len(digits) - 1
-            p.fillRect(cell, QBrush(vgrad(cell, ["#DADADA", "#FFFFFF", "#BDBDBD"]
-                                          if last else
-                                          ["#000000", "#3A3A3A", "#000000"])))
-            p.setPen(QColor("#111111") if last else QColor("#F2F2F2"))
-            p.drawText(cell, Qt.AlignmentFlag.AlignCenter, ch)
-        p.setFont(label_font)
-        p.setPen(QColor("#6B6453"))
-        p.drawText(QRectF(c.x() - 30, orect.bottom() + 1, 60, 11),
-                   Qt.AlignmentFlag.AlignCenter, "PHOTOS")
-
-        # the needle
-        tip = at(self.value, rf - 6)
-        tail = at(self.value + 0.5, 12)
-        ang = math.radians(start - self.value * self.SWEEP)
-        nx, ny = -math.sin(ang) * 2.4, -math.cos(ang) * 2.4
-        poly = QPolygonF([QPointF(c.x() + nx, c.y() + ny), tip,
-                          QPointF(c.x() - nx, c.y() - ny), tail])
-        p.setPen(QPen(QColor(0, 0, 0, 60), 1))
-        p.setBrush(QColor(0, 0, 0, 45))
-        p.drawPolygon(poly.translated(1.5, 2))
-        p.setPen(QPen(QColor("#7A1D10"), 0.8))
-        p.setBrush(NEEDLE)
-        p.drawPolygon(poly)
-        hub = QRadialGradient(QPointF(c.x() - 2, c.y() - 2), 8)
-        hub.setColorAt(0, QColor("#FFFFFF"))
-        hub.setColorAt(1, QColor("#7C858E"))
-        p.setBrush(QBrush(hub))
-        p.setPen(QPen(QColor("#3A4048"), 1))
-        p.drawEllipse(c, 6.5, 6.5)
-
-        # glass
-        glare = QPainterPath()
-        glare.addEllipse(QPointF(c.x() - R * 0.18, c.y() - R * 0.36),
-                         R * 0.62, R * 0.36)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(255, 255, 255, 34))
-        p.drawPath(glare)
-
-
-class PaintButton(QWidget):
-    """The one important button: Windows 95 bevels, Metropolitan paint."""
+class Pressable(QWidget):
+    """A dashboard part that can be pressed."""
 
     clicked = pyqtSignal()
 
-    def __init__(self, text, parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self.text = text
-        self.sub = ""
         self.down = False
         self.hover = False
-        self.setMinimumSize(170, 52)
-        self.setSizePolicy(QSizePolicy.Policy.Preferred,
-                           QSizePolicy.Policy.Fixed)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-
-    def set_text(self, text, sub=""):
-        self.text, self.sub = text, sub
-        self.update()
 
     def setEnabled(self, on):
         super().setEnabled(on)
@@ -654,295 +360,815 @@ class PaintButton(QWidget):
             if self.rect().contains(e.position().toPoint()):
                 self.clicked.emit()
 
-    def paintEvent(self, _):
-        p = QPainter(self)
-        r = self.rect()
-        # Windows 95's default button wears an extra black ring.
-        p.setPen(QPen(DARK, 1))
-        p.drawRect(r.adjusted(0, 0, -1, -1))
-        inner = r.adjusted(1, 1, -1, -1)
-        if self.isEnabled():
-            face = [PAINT[0], PAINT[1], PAINT[2], PAINT[3]] if not self.hover \
-                else ["#D2E7F6", "#AACFE8", "#8DBAD9", "#72A4C9"]
-            p.fillRect(inner, QBrush(vgrad(inner, face)))
-        else:
-            p.fillRect(inner, CREAM)
-        body = bevel(p, inner, raised=not self.down)
-        o = 1 if self.down else 0
-        text_rect = body.translated(o, o)
-        if self.isEnabled():
-            p.setPen(QColor(20, 45, 70, 140))
-            p.setFont(ui_font(10, bold=True))
-            main = text_rect.adjusted(0, 0, 0, -14 if self.sub else 0)
-            p.drawText(main.translated(1, 1), Qt.AlignmentFlag.AlignCenter,
-                       self.text)
-            p.setPen(WHITE)
-            p.drawText(main, Qt.AlignmentFlag.AlignCenter, self.text)
-            if self.sub:
-                p.setFont(ui_font(8))
-                p.setPen(QColor("#F2F8FC"))
-                p.drawText(text_rect.adjusted(0, 22, 0, 0),
-                           Qt.AlignmentFlag.AlignCenter, self.sub)
-        else:
-            p.setFont(ui_font(10, bold=True))
-            # Windows 95's etched disabled text
-            p.setPen(WHITE)
-            p.drawText(text_rect.translated(1, 1), Qt.AlignmentFlag.AlignCenter,
-                       self.text)
-            p.setPen(SHADOW)
-            p.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, self.text)
-        if self.hasFocus():
-            pen = QPen(INK, 1, Qt.PenStyle.DotLine)
-            p.setPen(pen)
-            p.drawRect(body.adjusted(2, 2, -3, -3))
+
+def dial_face(p, c, r):
+    face = QRadialGradient(QPointF(c.x() - r * 0.3, c.y() - r * 0.35), r * 1.4)
+    face.setColorAt(0.0, QColor("#FFFEF8"))
+    face.setColorAt(1.0, QColor("#EDE3C8"))
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QBrush(face))
+    p.drawEllipse(c, r, r)
 
 
-def script_font(size):
-    """Something cursive for the nameplate, as the car wore its name."""
-    for name in ("Script MT Bold", "Lobster", "Brush Script MT",
-                 "Freestyle Script", "URW Chancery L", "Z003",
-                 "TeX Gyre Chorus"):
-        if name in QFontDatabase.families():
-            f = QFont(name)
-            f.setPointSizeF(size)
-            return f
-    f = QFont("DejaVu Serif")
-    f.setPointSizeF(size * 0.8)
-    f.setItalic(True)
-    f.setBold(True)
-    return f
+def needle(p, c, angle, length, tail=8, width=3.4, tone=MARDI_GRAS):
+    a = math.radians(angle)
+    tip = QPointF(c.x() + length * math.cos(a), c.y() - length * math.sin(a))
+    back = QPointF(c.x() - tail * math.cos(a), c.y() + tail * math.sin(a))
+    nx, ny = -math.sin(a) * width, -math.cos(a) * width
+    poly = QPolygonF([QPointF(c.x() + nx, c.y() + ny), tip,
+                      QPointF(c.x() - nx, c.y() - ny), back])
+    path = QPainterPath()
+    path.addPolygon(poly)
+    path.closeSubpath()
+    toon.drop_shadow(p, path, 1.5, 2.5, 50)
+    toon.paint(p, path, tone, gloss=False, outline=1.8)
 
 
-class Nameplate(QWidget):
-    """'DigiCarlo' in chrome script, fixed to the bodywork."""
-
-    def __init__(self, text="DigiCarlo", parent=None):
-        super().__init__(parent)
-        self.text = text
-        self.setFixedHeight(40)
-
-    def paintEvent(self, _):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        font = script_font(21)
-        path = QPainterPath()
-        path.addText(0, 0, font, self.text)
-        box = path.boundingRect()
-        scale = min(1.0, (self.width() - 8) / max(1.0, box.width()))
-        p.translate((self.width() - box.width() * scale) / 2 - box.left() * scale,
-                    (self.height() - box.height() * scale) / 2
-                    - box.top() * scale)
-        p.scale(scale, scale)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(20, 45, 70, 110))
-        p.drawPath(path.translated(1.2, 1.6))
-        g = QLinearGradient(QPointF(0, box.top()), QPointF(0, box.bottom()))
-        for at, col in CHROME:
-            g.setColorAt(at, QColor(col))
-        p.setBrush(QBrush(g))
-        p.setPen(QPen(QColor("#3B4550"), 0.9))
-        p.drawPath(path)
+def hub(p, c, r):
+    g = QRadialGradient(QPointF(c.x() - r * 0.3, c.y() - r * 0.3), r * 1.3)
+    g.setColorAt(0, QColor("#FFFFFF"))
+    g.setColorAt(1, QColor("#7C858E"))
+    p.setBrush(QBrush(g))
+    p.setPen(toon.pen(OUTLINE, 2.0))
+    p.drawEllipse(c, r, r)
 
 
-class Dashboard(QWidget):
-    """The strip along the bottom: painted body, chrome trim, the dial,
-    a cream placard for what is happening, and the go button."""
+def glass(p, c, r):
+    glare = QPainterPath()
+    glare.addEllipse(QPointF(c.x() - r * 0.2, c.y() - r * 0.42), r * 0.62,
+                     r * 0.32)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(255, 255, 255, 46))
+    p.drawPath(glare)
+
+
+class Speedometer(QWidget):
+    """Percent done on the dial; files ever developed on the odometer."""
+
+    SWEEP = 220.0
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedHeight(166)
-        row = QHBoxLayout(self)
-        row.setContentsMargins(14, 11, 14, 8)
-        row.setSpacing(14)
-        self.gauge = Speedometer(self)
-        row.addWidget(self.gauge, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.setFixedSize(156, 156)
+        self.value = 0.0
+        self.target = 0.0
+        self.odometer = 0
+        self.lit = False
+        self._timer = QTimer(self)
+        self._timer.setInterval(30)
+        self._timer.timeout.connect(self._step)
+        self.setToolTip("How far the current job has got. The odometer counts "
+                        "every file DigiCarlo has put in the library.")
 
-        self.placard = QFrame(self)
-        pl = QVBoxLayout(self.placard)
-        pl.setContentsMargins(10, 8, 10, 8)
-        pl.setSpacing(3)
-        self.caption = QLabel("Ready", self.placard)
-        self.caption.setFont(ui_font(8, bold=True))
-        self.detail = QLabel("", self.placard)
-        self.detail.setWordWrap(True)
-        self.detail.setAlignment(Qt.AlignmentFlag.AlignTop |
-                                 Qt.AlignmentFlag.AlignLeft)
-        self.detail.setSizePolicy(QSizePolicy.Policy.Expanding,
-                                  QSizePolicy.Policy.Expanding)
-        pl.addWidget(self.caption)
-        pl.addWidget(self.detail, 1)
-        self.stop = QPushButton("Stop", self.placard)
-        self.stop.setVisible(False)
-        self.stop.setFixedWidth(75)
-        pl.addWidget(self.stop, 0, Qt.AlignmentFlag.AlignRight)
-        self.placard.paintEvent = self._paint_placard
-        row.addWidget(self.placard, 1)
+    def set_value(self, frac):
+        self.target = max(0.0, min(1.0, frac))
+        if not self._timer.isActive():
+            self._timer.start()
 
-        col = QVBoxLayout()
-        col.setSpacing(6)
-        col.addStretch(1)
-        col.addWidget(Nameplate("DigiCarlo", self))
-        self.go = PaintButton("Put in library", self)
-        self.go.setFixedWidth(200)
-        col.addWidget(self.go)
-        col.addStretch(1)
-        row.addLayout(col)
+    def set_odometer(self, n):
+        self.odometer = n
+        self.update()
 
-    def _paint_placard(self, _):
-        p = QPainter(self.placard)
-        r = self.placard.rect()
-        p.fillRect(r, CREAM_LIGHT)
-        bevel(p, r, raised=False)
+    def set_lit(self, on):
+        self.lit = on
+        self.update()
+
+    def _step(self):
+        d = self.target - self.value
+        if abs(d) < 0.002:
+            self.value = self.target
+            self._timer.stop()
+        else:
+            self.value += d * 0.22
+        self.update()
+
+    def paintEvent(self, _):
+        p = aa(self)
+        c = QPointF(self.width() / 2, self.height() / 2)
+        R = min(self.width(), self.height()) / 2 - 3
+        rf = R - 11
+        toon.drop_shadow(p, toon.circle(c, R), 3, 4, 60)
+        dial_face(p, c, rf)
+        if self.lit:
+            p.setBrush(QColor(255, 220, 120, 45))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawEllipse(c, rf, rf)
+        toon.chrome_ring(p, c, R, rf)
+        start = 90 + self.SWEEP / 2
+
+        def at(frac, radius):
+            ang = math.radians(start - frac * self.SWEEP)
+            return QPointF(c.x() + radius * math.cos(ang),
+                           c.y() - radius * math.sin(ang))
+        for i in range(21):
+            frac = i / 20.0
+            major = i % 4 == 0
+            p.setPen(toon.pen(CARIBBEAN["deep"], 3.0 if major else 1.8))
+            p.drawLine(at(frac, rf - 4), at(frac, rf - (13 if major else 8)))
+        p.setFont(toon.display_font(8.5))
+        p.setPen(INK)
+        for i in range(6):
+            pt = at(i / 5.0, rf - 25)
+            p.drawText(QRectF(pt.x() - 16, pt.y() - 8, 32, 16),
+                       Qt.AlignmentFlag.AlignCenter, str(i * 20))
+        p.setFont(toon.body_font(6.5, QFont.Weight.Black))
+        p.setPen(QColor(CARIBBEAN["deep"]))
+        p.drawText(QRectF(c.x() - 30, c.y() + 10, 60, 12),
+                   Qt.AlignmentFlag.AlignCenter, "% DONE")
+        digits = "%06d" % (self.odometer % 1000000)
+        dw, dh = 10, 15
+        ow = dw * len(digits) + 4
+        orect = QRectF(c.x() - ow / 2, c.y() + rf * 0.40, ow, dh + 4)
+        p.setPen(toon.pen(OUTLINE, 1.8))
+        p.setBrush(QColor("#161616"))
+        p.drawRoundedRect(orect, 3, 3)
+        p.setFont(toon.body_font(8, QFont.Weight.Black))
+        for i, ch in enumerate(digits):
+            cell = QRectF(orect.left() + 2 + i * dw, orect.top() + 2, dw - 1, dh)
+            last = i == len(digits) - 1
+            p.fillRect(cell, QBrush(toon.vgrad(cell, ["#DADADA", "#FFFFFF",
+                                                      "#BDBDBD"] if last else
+                                               ["#000000", "#3A3A3A",
+                                                "#000000"])))
+            p.setPen(QColor("#111111") if last else QColor("#F2F2F2"))
+            p.drawText(cell, Qt.AlignmentFlag.AlignCenter, ch)
+        p.setFont(toon.body_font(6.5, QFont.Weight.Black))
+        p.setPen(QColor(CARIBBEAN["deep"]))
+        p.drawText(QRectF(c.x() - 30, orect.bottom() + 1, 60, 12),
+                   Qt.AlignmentFlag.AlignCenter, "PHOTOS")
+        needle(p, c, start - self.value * self.SWEEP, rf - 8, tail=12)
+        hub(p, c, 8)
+        glass(p, c, rf)
+
+
+class FuelGauge(QWidget):
+    """Free space on the disk the library is on, E to F."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(80, 80)
+        self.frac = 0.5
+
+    def set_space(self, free, total):
+        self.frac = free / total if total else 0.0
+        self.setToolTip("Fuel: %.1f GB free of %.0f GB where the library is"
+                        % (free / 1e9, total / 1e9))
+        self.update()
+
+    def paintEvent(self, _):
+        p = aa(self)
+        c = QPointF(self.width() / 2, self.height() / 2)
+        R = self.width() / 2 - 3
+        rf = R - 7
+        toon.drop_shadow(p, toon.circle(c, R), 2, 3, 55)
+        dial_face(p, c, rf)
+        # a red band where the tank is nearly empty
+        p.setPen(toon.pen(MARDI_GRAS["base"], 4.0))
+        p.drawArc(QRectF(c.x() - rf + 6, c.y() - rf + 6, 2 * rf - 12,
+                         2 * rf - 12), 150 * 16, -22 * 16)
+        for i in range(5):
+            ang = math.radians(150 - i * 30)
+            p.setPen(toon.pen(INK, 2.2))
+            p.drawLine(QPointF(c.x() + (rf - 3) * math.cos(ang),
+                               c.y() - (rf - 3) * math.sin(ang)),
+                       QPointF(c.x() + (rf - 9) * math.cos(ang),
+                               c.y() - (rf - 9) * math.sin(ang)))
+        toon.chrome_ring(p, c, R, rf, outline=2.0)
+        p.setFont(toon.display_font(8))
+        p.setPen(INK)
+        p.drawText(QRectF(c.x() - rf + 4, c.y() + 2, 16, 14),
+                   Qt.AlignmentFlag.AlignCenter, "E")
+        p.drawText(QRectF(c.x() + rf - 20, c.y() + 2, 16, 14),
+                   Qt.AlignmentFlag.AlignCenter, "F")
+        p.setFont(toon.body_font(5.5, QFont.Weight.Black))
+        p.setPen(QColor(CARIBBEAN["deep"]))
+        p.drawText(QRectF(c.x() - 20, c.y() + 12, 40, 10),
+                   Qt.AlignmentFlag.AlignCenter, "SPACE")
+        needle(p, c, 150 - 120 * max(0.0, min(1.0, self.frac)), rf - 7,
+               tail=5, width=2.6)
+        hub(p, c, 5)
+
+
+class DashClock(QWidget):
+    """The time now -- the date a pull's newest shot will be given."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(80, 80)
+        t = QTimer(self)
+        t.timeout.connect(self._tick)
+        t.start(15000)
+        self._tick()
+
+    def _tick(self):
+        now = datetime.datetime.now()
+        self.setToolTip("It is %s. Pull now, and the newest shot is dated "
+                        "with this time." % now.strftime("%H:%M"))
+        self.update()
+
+    def paintEvent(self, _):
+        p = aa(self)
+        c = QPointF(self.width() / 2, self.height() / 2)
+        R = self.width() / 2 - 3
+        rf = R - 7
+        toon.drop_shadow(p, toon.circle(c, R), 2, 3, 55)
+        dial_face(p, c, rf)
+        for i in range(12):
+            ang = math.radians(90 - i * 30)
+            major = i % 3 == 0
+            p.setPen(toon.pen(INK, 2.4 if major else 1.4))
+            p.drawLine(QPointF(c.x() + (rf - 3) * math.cos(ang),
+                               c.y() - (rf - 3) * math.sin(ang)),
+                       QPointF(c.x() + (rf - (9 if major else 6)) * math.cos(ang),
+                               c.y() - (rf - (9 if major else 6)) * math.sin(ang)))
+        toon.chrome_ring(p, c, R, rf, outline=2.0)
+        p.setFont(toon.body_font(5.5, QFont.Weight.Black))
+        p.setPen(QColor(CARIBBEAN["deep"]))
+        p.drawText(QRectF(c.x() - 20, c.y() + 9, 40, 10),
+                   Qt.AlignmentFlag.AlignCenter, "NOW")
+        now = datetime.datetime.now()
+        hours = (now.hour % 12 + now.minute / 60.0) * 30
+        minutes = now.minute * 6
+        for ang, length, width in ((hours, rf * 0.50, 3.4),
+                                   (minutes, rf * 0.78, 2.4)):
+            a = math.radians(90 - ang)
+            p.setPen(toon.pen(INK, width))
+            p.drawLine(c, QPointF(c.x() + length * math.cos(a),
+                                  c.y() - length * math.sin(a)))
+        hub(p, c, 4)
+
+
+class SteeringWheel(Pressable):
+    """Snowberry rim, chrome spokes, and a horn that honks when pressed --
+    and, while it is at it, looks for cameras again."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(176, 176)
+        self.burst = 0
+        self._t = QTimer(self)
+        self._t.setSingleShot(True)
+        self._t.timeout.connect(self._quiet)
+        self.setToolTip("Honk! Looks for cameras and cards again.")
+        self.clicked.connect(self._honked)
+
+    def _honked(self):
+        self.burst = 1
+        self._t.start(750)
+        self.update()
+
+    def _quiet(self):
+        self.burst = 0
+        self.update()
+
+    def paintEvent(self, _):
+        p = aa(self)
+        c = QPointF(self.width() / 2, self.height() / 2 + 2)
+        R, r = 82, 67
+        rim = toon.circle(c, R).subtracted(toon.circle(c, r))
+        toon.drop_shadow(p, rim, 3, 5, 55)
+        # two chrome spokes, down and out, as on the Metropolitan
+        for ang in (215, 325):
+            a = math.radians(ang)
+            end = QPointF(c.x() + (r + 4) * math.cos(a), c.y() - (r + 4) * math.sin(a))
+            spoke = QPainterPath()
+            nx, ny = -math.sin(a) * 9, -math.cos(a) * 9
+            spoke.addPolygon(QPolygonF([
+                QPointF(c.x() + nx, c.y() + ny), QPointF(end.x() + nx * 0.7,
+                                                         end.y() + ny * 0.7),
+                QPointF(end.x() - nx * 0.7, end.y() - ny * 0.7),
+                QPointF(c.x() - nx, c.y() - ny)]))
+            spoke.closeSubpath()
+            p.setBrush(toon.chrome_brush(spoke.boundingRect()))
+            p.setPen(toon.pen(OUTLINE, 2.2))
+            p.drawPath(spoke)
+        toon.paint(p, rim, SNOWBERRY, outline=2.6)
+        # finger grips on the inside of the rim
+        p.setPen(toon.pen(SNOWBERRY["deep"], 2.0))
+        for i in range(14):
+            a = math.radians(i * 360 / 14 + 8)
+            p.drawLine(QPointF(c.x() + (r + 1) * math.cos(a), c.y() - (r + 1) * math.sin(a)),
+                       QPointF(c.x() + (r + 5) * math.cos(a), c.y() - (r + 5) * math.sin(a)))
+        # the horn: a chrome ring round a face
+        pressed = self.down
+        hr = 33
+        toon.chrome_ring(p, c, hr, hr - 7)
+        cap_r = (hr - 7) * (0.92 if pressed else 1.0)
+        tone = dict(CARIBBEAN)
+        if self.hover and not pressed:
+            tone = {"light": "#9BE3EC", "base": "#45B6CA", "shade": "#258CA0"}
+        if not self.isEnabled():
+            tone = GREY
+        cc = QPointF(c.x(), c.y() + (1.5 if pressed else 0))
+        toon.paint(p, toon.circle(cc, cap_r), tone, outline=2.2)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(WHITE)
+        for dx in (-8, 8):
+            p.drawEllipse(QPointF(cc.x() + dx, cc.y() - 5), 5, 6.5)
+        p.setBrush(INK)
+        for dx in (-7, 9):
+            p.drawEllipse(QPointF(cc.x() + dx, cc.y() - 4), 2.4, 3.2)
+        p.setPen(toon.pen(INK, 2.6))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        if pressed or self.burst:
+            p.setBrush(QColor(MARDI_GRAS["shade"]))
+            p.drawEllipse(QPointF(cc.x(), cc.y() + 9), 5, 5.5)
+        else:
+            p.drawArc(QRectF(cc.x() - 11, cc.y() - 2, 22, 16), 200 * 16, 140 * 16)
+        if self.burst:
+            self._paint_burst(p, QPointF(self.width() - 42, 30))
+
+    def _paint_burst(self, p, c):
+        pts = []
+        for i in range(18):
+            rad = 34 if i % 2 == 0 else 22
+            a = math.radians(i * 20 + 5)
+            pts.append(QPointF(c.x() + rad * math.cos(a), c.y() - rad * 0.72 * math.sin(a)))
+        path = QPainterPath()
+        path.addPolygon(QPolygonF(pts))
+        path.closeSubpath()
+        toon.paint(p, path, SUNBURST, gloss=False, outline=2.2)
+        toon.outlined_text(p, QRectF(c.x() - 34, c.y() - 12, 68, 24),
+                           Qt.AlignmentFlag.AlignCenter, "HONK!",
+                           toon.display_font(10), MARDI_GRAS["base"], OUTLINE, 2.4)
+
+
+class PresetKey(Pressable):
+    """One of a 1950s car radio's chrome push-button presets."""
+
+    def __init__(self, text, parent=None):
+        super().__init__(parent)
+        self.text = text
+        self.setFixedHeight(38)
+        self.setMinimumWidth(52)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding,
+                           QSizePolicy.Policy.Fixed)
+
+    def paintEvent(self, _):
+        p = aa(self)
+        o = 2.5 if self.down else 0.0
+        r = QRectF(2, 2 + o, self.width() - 4, self.height() - 7)
+        path = toon.rounded(r, 7)
+        if not self.down:
+            toon.drop_shadow(p, path, 0, 3.5, 70)
+        p.setBrush(toon.chrome_brush(r))
+        p.setPen(toon.pen(OUTLINE, 2.2))
+        p.drawPath(path)
+        if self.hover and self.isEnabled():
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(255, 230, 120, 70))
+            p.drawPath(path)
+        p.setFont(toon.body_font(8, QFont.Weight.Black))
+        p.setPen(INK if self.isEnabled() else QColor(0, 0, 0, 80))
+        p.drawText(r, Qt.AlignmentFlag.AlignCenter, self.text)
+
+
+class Knob(Pressable):
+    def __init__(self, tip, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(38, 38)
+        self.setToolTip(tip)
+
+    def paintEvent(self, _):
+        p = aa(self)
+        c = QPointF(self.width() / 2, self.height() / 2)
+        r = 16 if not self.down else 15
+        toon.drop_shadow(p, toon.circle(c, r), 1.5, 3, 60)
+        g = QRadialGradient(QPointF(c.x() - 5, c.y() - 6), r * 1.4)
+        g.setColorAt(0, QColor("#FFFFFF"))
+        g.setColorAt(0.5, QColor("#C9CFD5"))
+        g.setColorAt(1, QColor("#7A838C"))
+        p.setBrush(QBrush(g))
+        p.setPen(toon.pen(OUTLINE, 2.2))
+        p.drawEllipse(c, r, r)
+        p.setPen(toon.pen(QColor("#6A737C"), 1.4))
+        for i in range(16):
+            a = math.radians(i * 22.5)
+            p.drawLine(QPointF(c.x() + (r - 4) * math.cos(a), c.y() - (r - 4) * math.sin(a)),
+                       QPointF(c.x() + (r - 1.5) * math.cos(a), c.y() - (r - 1.5) * math.sin(a)))
+        p.setBrush(QColor(MARDI_GRAS["base"]) if self.hover else QColor(INK))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawEllipse(QPointF(c.x(), c.y() - r + 7), 2.4, 2.4)
+
+
+class Radio(QWidget):
+    """The status display, and the preset keys that date selected shots."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(300, 176)
+        self.caption = "Ready"
+        self.detail = ""
+        self.keys = {}
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(16, 104, 16, 14)
+        row = QHBoxLayout()
+        row.setSpacing(7)
+        for key, text, tip in (
+                ("date", "Set date", "Date the selected shots from a time "
+                                     "you choose"),
+                ("camera", "Camera", "Keep the camera's own dates for the "
+                                     "selected shots"),
+                ("auto", "Auto", "Date the selected shots from when they "
+                                 "came off the camera"),
+                ("skip", "Leave out", "Keep the selected shots out of the "
+                                      "library")):
+            k = PresetKey(text, self)
+            k.setToolTip(tip)
+            self.keys[key] = k
+            row.addWidget(k)
+        lay.addLayout(row)
+        self.left = Knob("Activity log", self)
+        self.right = Knob("Folders...", self)
+        self.left.move(12, 38)
+        self.right.move(self.width() - 50, 38)
 
     def say(self, caption, detail=""):
-        self.caption.setText(caption)
-        self.detail.setText(detail)
+        self.caption, self.detail = caption, detail
+        self.update()
 
     def paintEvent(self, _):
-        p = QPainter(self)
-        r = self.rect()
-        chrome_strip(p, QRect(r.left(), r.top(), r.width(), 5))
-        body = QRect(r.left(), r.top() + 5, r.width(), r.height() - 5)
-        paint_panel(p, body)
-        # a second, thinner spear of chrome low on the body
-        chrome_strip(p, QRect(r.left(), r.bottom() - 3, r.width(), 3))
+        p = aa(self)
+        face = QRectF(3, 6, self.width() - 6, self.height() - 12)
+        path = toon.rounded(face, 18)
+        toon.drop_shadow(p, path, 3, 5, 60)
+        p.setBrush(toon.chrome_brush(face))
+        p.setPen(toon.pen(OUTLINE, 2.6))
+        p.drawPath(path)
+        inset = face.adjusted(8, 8, -8, -8)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(CARIBBEAN["deep"]))
+        p.drawRoundedRect(inset, 12, 12)
+        # the dial window
+        win = QRectF(58, 16, self.width() - 116, 80)
+        wp = toon.rounded(win, 9)
+        p.setBrush(QBrush(toon.vgrad(win, ["#FFF6D6", "#FFFBEA", "#F5E7B8"])))
+        p.setPen(toon.pen(OUTLINE, 2.2))
+        p.drawPath(wp)
+        p.save()
+        p.setClipPath(wp)
+        p.setPen(toon.pen(QColor("#B89B5E"), 1.4))
+        p.setFont(toon.body_font(5.5, QFont.Weight.Bold))
+        for i, mark in enumerate(("55", "60", "70", "80", "100", "130", "160")):
+            x = win.left() + 10 + i * (win.width() - 20) / 6
+            p.drawLine(QPointF(x, win.top() + 3), QPointF(x, win.top() + 8))
+            p.drawText(QRectF(x - 10, win.top() + 8, 20, 9),
+                       Qt.AlignmentFlag.AlignCenter, mark)
+        text_r = win.adjusted(10, 20, -8, -4)
+        p.setFont(toon.display_font(10))
+        p.setPen(INK)
+        cap = p.fontMetrics().elidedText(self.caption, Qt.TextElideMode.ElideRight,
+                                         int(text_r.width()))
+        p.drawText(QRectF(text_r.left(), text_r.top(), text_r.width(), 18),
+                   Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, cap)
+        p.setFont(toon.body_font(8, QFont.Weight.Bold))
+        p.setPen(INK_SOFT)
+        p.drawText(QRectF(text_r.left(), text_r.top() + 19, text_r.width(),
+                          text_r.height() - 19),
+                   Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop |
+                   Qt.TextFlag.TextWordWrap, self.detail)
+        p.restore()
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(255, 255, 255, 60))
+        p.drawRoundedRect(QRectF(win.left() + 6, win.top() + 3, win.width() - 12, 6), 3, 3)
 
 
-# ---------------------------------------------------------------------------
-# Cameras and cards
-# ---------------------------------------------------------------------------
+def paint_item_glyph(p, rect, kind, detail=""):
+    """A cartoon of what is in the glove box."""
+    r = QRectF(rect)
+    cx, cy = r.center().x(), r.center().y()
+    if kind == "map":
+        path = QPainterPath()
+        w, h = r.width() * 0.8, r.height() * 0.66
+        x0, y0 = cx - w / 2, cy - h / 2
+        path.addPolygon(QPolygonF([QPointF(x0, y0 + 3), QPointF(x0 + w / 3, y0),
+                                   QPointF(x0 + 2 * w / 3, y0 + 3),
+                                   QPointF(x0 + w, y0),
+                                   QPointF(x0 + w, y0 + h - 3),
+                                   QPointF(x0 + 2 * w / 3, y0 + h),
+                                   QPointF(x0 + w / 3, y0 + h - 3),
+                                   QPointF(x0, y0 + h)]))
+        path.closeSubpath()
+        toon.paint(p, path, {"light": "#FFF8D8", "base": "#F6E7B0",
+                             "shade": "#E3CD86"}, gloss=False, outline=2.0)
+        p.setPen(toon.pen(QColor("#C9B06A"), 1.4))
+        p.drawLine(QPointF(x0 + w / 3, y0), QPointF(x0 + w / 3, y0 + h - 3))
+        p.drawLine(QPointF(x0 + 2 * w / 3, y0 + 3), QPointF(x0 + 2 * w / 3, y0 + h))
+        route = QPainterPath(QPointF(x0 + 6, y0 + h - 8))
+        route.cubicTo(QPointF(x0 + w * 0.3, y0 + 6), QPointF(x0 + w * 0.6, y0 + h),
+                      QPointF(x0 + w - 7, y0 + 9))
+        p.setPen(toon.pen(MARDI_GRAS["base"], 2.4))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawPath(route)
+        return
+    if kind == "sd":
+        w, h = r.width() * 0.58, r.height() * 0.78
+        x0, y0 = cx - w / 2, cy - h / 2
+        path = QPainterPath()
+        path.addPolygon(QPolygonF([QPointF(x0, y0), QPointF(x0 + w - 8, y0),
+                                   QPointF(x0 + w, y0 + 8), QPointF(x0 + w, y0 + h),
+                                   QPointF(x0, y0 + h)]))
+        path.closeSubpath()
+        toon.paint(p, path, {"light": "#6B7883", "base": "#4B5660",
+                             "shade": "#333B43"}, outline=2.0)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(SUNBURST["base"]))
+        for i in range(5):
+            p.drawRect(QRectF(x0 + 4 + i * (w - 10) / 5, y0 + 3, 3, 7))
+        label = QRectF(x0 + 4, y0 + h * 0.38, w - 8, h * 0.52)
+        toon.paint(p, toon.rounded(label, 3), SNOWBERRY, gloss=False, outline=1.6)
+        p.setFont(toon.display_font(7))
+        p.setPen(QColor(CARIBBEAN["deep"]))
+        p.drawText(label, Qt.AlignmentFlag.AlignCenter, "SD")
+        return
+    # a camera: two-tone like everything else here
+    small = kind == "sipix"
+    w, h = r.width() * (0.62 if small else 0.82), r.height() * (0.5 if small else 0.58)
+    x0, y0 = cx - w / 2, cy - h / 2 + 3
+    body = toon.rounded(QRectF(x0, y0, w, h), 6)
+    toon.drop_shadow(p, body, 1.5, 2.5, 60)
+    tone = GREY if small else CARIBBEAN
+    toon.paint(p, body, tone, outline=2.0)
+    toon.paint(p, toon.rounded(QRectF(x0 + 5, y0 - 5, w * 0.3, 7), 2), SNOWBERRY,
+               gloss=False, outline=1.8)
+    lr = h * 0.36
+    toon.chrome_ring(p, QPointF(cx + (0 if not small else 0), y0 + h / 2), lr,
+                     lr * 0.62, outline=1.8)
+    p.setBrush(QColor("#12303A"))
+    p.setPen(Qt.PenStyle.NoPen)
+    p.drawEllipse(QPointF(cx, y0 + h / 2), lr * 0.62, lr * 0.62)
+    p.setBrush(QColor(255, 255, 255, 210))
+    p.drawEllipse(QPointF(cx - lr * 0.2, y0 + h / 2 - lr * 0.2), lr * 0.18, lr * 0.18)
+    if small:
+        p.setBrush(QColor(MARDI_GRAS["base"]))
+        p.setPen(toon.pen(OUTLINE, 1.4))
+        p.drawEllipse(QPointF(x0 + w - 6, y0 - 1), 3, 3)
 
-def paint_source_glyph(p, rect, kind):
-    """A tiny Windows 95-style icon for a card or a camera."""
-    p.save()
-    p.translate(rect.topLeft())
-    p.setPen(QPen(INK, 1))
-    if kind in ("volume", "folder"):
-        if kind == "folder":
-            p.setBrush(QColor("#E8C55A"))
-            p.drawRect(2, 8, 26, 17)
-            p.drawRect(2, 5, 10, 3)
-        else:
-            card = QPolygonF([QPointF(6, 3), QPointF(22, 3), QPointF(26, 7),
-                              QPointF(26, 28), QPointF(6, 28)])
-            p.setBrush(QColor("#3F4A56"))
-            p.drawPolygon(card)
-            p.setBrush(QColor(PAINT[1]))
-            p.drawRect(9, 12, 14, 11)
-            p.setPen(QPen(QColor("#E6C04A"), 1))
-            for x in range(9, 23, 3):
-                p.drawLine(x, 5, x, 9)
-    else:
-        p.setBrush(QColor("#F4F0E4"))
-        p.drawRect(3, 9, 25, 17)
-        p.fillRect(QRect(4, 18, 24, 8), QColor(PAINT[2]))
-        p.drawLine(3, 18, 28, 18)
-        p.setBrush(QColor("#F4F0E4"))
-        p.drawRect(7, 6, 7, 3)
-        p.setBrush(QColor("#9AA3AC"))
-        p.drawEllipse(QPointF(16, 17), 6, 6)
-        p.setBrush(QColor("#1E3D5C"))
-        p.drawEllipse(QPointF(16, 17), 3.5, 3.5)
-    p.restore()
 
-
-class SourceRow(QWidget):
-    pull = pyqtSignal(object)
-
-    def __init__(self, src, parent=None):
+class GloveItem(Pressable):
+    def __init__(self, glyph, label, tip, parent=None):
         super().__init__(parent)
-        self.src = src
-        self.setMinimumHeight(52)
-        lay = QHBoxLayout(self)
-        lay.setContentsMargins(40, 4, 6, 4)
-        lay.setSpacing(6)
-        col = QVBoxLayout()
-        col.setSpacing(1)
-        name = QLabel(src.label, self)
-        name.setFont(ui_font(8, bold=True))
-        detail = QLabel(src.detail or src.kind, self)
-        detail.setStyleSheet("color: #5E5A50;")
-        col.addWidget(name)
-        col.addWidget(detail)
-        lay.addLayout(col, 1)
-        self.button = QPushButton("Pull", self)
-        self.button.setFixedWidth(52)
-        self.button.setToolTip("Copy the new pictures on %s into the archive"
-                               % src.label)
-        self.button.clicked.connect(lambda: self.pull.emit(self.src))
-        lay.addWidget(self.button, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.glyph = glyph
+        self.label = label
+        self.setToolTip(tip)
+        self.setFixedSize(84, 70)
 
     def paintEvent(self, _):
-        p = QPainter(self)
-        paint_source_glyph(p, QRect(5, (self.height() - 30) // 2, 30, 30),
-                           self.src.kind)
-        p.setPen(QPen(QColor("#D9D3C3"), 1))
-        p.drawLine(4, self.height() - 1, self.width() - 4, self.height() - 1)
+        p = aa(self)
+        r = QRectF(self.rect()).adjusted(2, 2, -2, -2)
+        if self.hover and self.isEnabled():
+            p.setPen(toon.pen(SUNBURST["base"], 2.4))
+            p.setBrush(QColor(255, 210, 63, 60))
+            p.drawRoundedRect(r, 10, 10)
+        if not self.isEnabled():
+            p.setOpacity(0.45)
+        o = 1.5 if self.down else 0
+        paint_item_glyph(p, QRectF(r.left() + 14, r.top() + 2 + o, r.width() - 28,
+                                   38), self.glyph)
+        p.setFont(toon.body_font(7.5, QFont.Weight.Black))
+        text = p.fontMetrics().elidedText(self.label, Qt.TextElideMode.ElideRight,
+                                          int(r.width()))
+        tr = QRectF(r.left(), r.bottom() - 20, r.width(), 18)
+        toon.outlined_text(p, tr, Qt.AlignmentFlag.AlignCenter, text,
+                           toon.body_font(7.5, QFont.Weight.Black), WHITE,
+                           OUTLINE, 2.4)
 
 
-class SourcePanel(QWidget):
+class GloveBox(QWidget):
+    """Putt-Putt kept what he found in his glove compartment. DigiCarlo keeps
+    the cameras and cards plugged in -- and a road map, for folders."""
+
     pull = pyqtSignal(object)
-    rescan = pyqtSignal()
     pull_folder = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(6)
-        head = QLabel("Cameras and cards", self)
-        head.setFont(ui_font(8, bold=True))
-        lay.addWidget(head)
-        self.inner = QWidget()
-        self.inner.setAutoFillBackground(True)
-        pal = self.inner.palette()
-        pal.setColor(QPalette.ColorRole.Window, FIELD)
-        self.inner.setPalette(pal)
-        self.rows = QVBoxLayout(self.inner)
-        self.rows.setContentsMargins(0, 0, 0, 0)
-        self.rows.setSpacing(0)
-        self.rows.addStretch(1)
-        lay.addWidget(Sunken(self.inner, self), 1)
-        buttons = QHBoxLayout()
-        buttons.setSpacing(6)
-        self.look = QPushButton("Look again", self)
-        self.look.clicked.connect(self.rescan)
-        self.folder = QPushButton("Folder...", self)
-        self.folder.setToolTip("Pull from a folder as if it were a card")
-        self.folder.clicked.connect(self.pull_folder)
-        buttons.addWidget(self.look)
-        buttons.addWidget(self.folder)
-        lay.addLayout(buttons)
+        self.setMinimumSize(214, 176)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding,
+                           QSizePolicy.Policy.Fixed)
+        self.grid = QGridLayout(self)
+        self.grid.setContentsMargins(16, 46, 16, 14)
+        self.grid.setHorizontalSpacing(2)
+        self.grid.setVerticalSpacing(0)
+        self.items = []
+        self.found = []
+        self.busy = False
+        self.set_sources([])
 
     def set_sources(self, found, busy=False):
-        while self.rows.count() > 1:
-            item = self.rows.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        if not found:
-            empty = QLabel("Nothing plugged in.\n\nPut a card in the reader, "
-                           "or connect a camera by USB.", self.inner)
-            empty.setWordWrap(True)
-            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            empty.setStyleSheet("color: #5E5A50; padding: 12px;")
-            self.rows.insertWidget(0, empty)
-            return
-        for n, src in enumerate(found):
-            row = SourceRow(src, self.inner)
-            row.pull.connect(self.pull)
-            row.button.setEnabled(not busy)
-            self.rows.insertWidget(n, row)
+        self.found = list(found)
+        self.busy = busy
+        self._rebuild()
 
     def set_busy(self, busy):
-        for i in range(self.rows.count()):
-            w = self.rows.itemAt(i).widget()
-            if isinstance(w, SourceRow):
-                w.button.setEnabled(not busy)
-        self.folder.setEnabled(not busy)
+        self.busy = busy
+        for it in self.items:
+            it.setEnabled(not busy)
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self._rebuild()
+
+    def _rebuild(self):
+        for it in self.items:
+            self.grid.removeWidget(it)
+            it.deleteLater()
+        self.items = []
+        entries = []
+        for src in self.found:
+            if src.kind in ("volume", "folder"):
+                glyph = "sd" if "SD card" in (src.detail or "") else "camera"
+            else:
+                glyph = "sipix" if src.kind == "sipix" else "camera"
+            entries.append((glyph, src.label, "Pull the new pictures from %s"
+                            % src.describe(), src))
+        entries.append(("map", "A folder...", "Pull from a folder on this "
+                        "computer, as if it were a card", None))
+        cols = max(1, (self.width() - 32) // 86)
+        for n, (glyph, label, tip, src) in enumerate(entries):
+            it = GloveItem(glyph, label, tip, self)
+            if src is None:
+                it.clicked.connect(self.pull_folder)
+            else:
+                it.clicked.connect(lambda s=src: self.pull.emit(s))
+            it.setEnabled(not self.busy)
+            self.grid.addWidget(it, n // cols, n % cols,
+                                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+            it.show()
+            self.items.append(it)
+        self.grid.setColumnStretch(cols, 1)
+        self.grid.setRowStretch((len(entries) - 1) // cols + 1, 1)
+        self.update()
+
+    def paintEvent(self, _):
+        p = aa(self)
+        r = QRectF(self.rect()).adjusted(3, 6, -3, -6)
+        frame = toon.rounded(r, 16)
+        toon.drop_shadow(p, frame, 3, 5, 60)
+        toon.paint(p, frame, SNOWBERRY, outline=2.6)
+        # the chrome script on the lid
+        plate = QRectF(r.left() + 12, r.top() + 5, r.width() - 24, 30)
+        font = toon.script_font(17)
+        path = QPainterPath()
+        path.addText(0, 0, font, "DigiCarlo")
+        box = path.boundingRect()
+        scale = min(1.0, plate.height() / max(1.0, box.height()))
+        p.save()
+        p.translate(plate.center().x() - box.center().x() * scale,
+                    plate.center().y() - box.center().y() * scale)
+        p.scale(scale, scale)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(20, 45, 55, 90))
+        p.drawPath(path.translated(1.2, 1.6))
+        p.setBrush(toon.chrome_brush(box))
+        p.setPen(toon.pen(QColor("#3B4550"), 1.0))
+        p.drawPath(path)
+        p.restore()
+        inside = QRectF(r.left() + 9, r.top() + 38, r.width() - 18,
+                        r.height() - 46)
+        ip = toon.rounded(inside, 11)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(toon.vgrad(inside, ["#0B2F37", "#155A69", "#1B6C7D"])))
+        p.drawPath(ip)
+        p.setPen(toon.pen(OUTLINE, 2.4))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawPath(ip)
+        if not self.found:
+            p.setFont(toon.body_font(7.5, QFont.Weight.Bold))
+            p.setPen(QColor(255, 255, 255, 150))
+            p.drawText(inside.adjusted(96, 8, -8, -8),
+                       Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter |
+                       Qt.TextFlag.TextWordWrap,
+                       "No camera plugged in. Put a card in the reader or "
+                       "connect a camera.")
+
+
+class Starter(Pressable):
+    """The big red starter button. When a job is running it says STOP."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(136, 176)
+        self.count = 0
+        self.busy = False
+
+    def set_state(self, count, busy):
+        self.count, self.busy = count, busy
+        self.setEnabled(busy or count > 0)
+        self.setToolTip("Stop after the file being worked on" if busy else
+                        "Put the %d waiting shot%s in the library"
+                        % (count, "" if count == 1 else "s") if count else
+                        "Nothing is waiting")
+        self.update()
+
+    def paintEvent(self, _):
+        p = aa(self)
+        c = QPointF(self.width() / 2, 70)
+        R, r = 60, 48
+        toon.drop_shadow(p, toon.circle(c, R), 3, 5, 65)
+        toon.chrome_ring(p, c, R, r)
+        tone = SUNBURST if self.busy else MARDI_GRAS if self.isEnabled() else GREY
+        if self.hover and self.isEnabled() and not self.busy:
+            tone = {"light": "#FF8C7C", "base": "#E84A3E", "shade": "#B32F25"}
+        cr = r * (0.93 if self.down else 1.0)
+        cc = QPointF(c.x(), c.y() + (2 if self.down else 0))
+        toon.paint(p, toon.circle(cc, cr), tone, outline=2.6)
+        word = "STOP" if self.busy else "START"
+        toon.outlined_text(p, QRectF(cc.x() - cr, cc.y() - 14, 2 * cr, 28),
+                           Qt.AlignmentFlag.AlignCenter, word,
+                           toon.display_font(15),
+                           WHITE if self.isEnabled() else QColor("#EEF0F2"),
+                           OUTLINE, 3.2)
+        label = "stop the job" if self.busy else "put in library"
+        toon.outlined_text(p, QRectF(0, c.y() + R + 6, self.width(), 18),
+                           Qt.AlignmentFlag.AlignCenter, label,
+                           toon.display_font(9), WHITE, OUTLINE, 2.8)
+        if self.count and not self.busy:
+            b = QPointF(c.x() + R * 0.72, c.y() - R * 0.72)
+            text = str(self.count) if self.count < 1000 else "999+"
+            p.setFont(toon.display_font(9))
+            w = max(28, p.fontMetrics().horizontalAdvance(text) + 14)
+            badge = toon.rounded(QRectF(b.x() - w / 2, b.y() - 14, w, 28), 14)
+            toon.paint(p, badge, SUNBURST, outline=2.4)
+            p.setPen(INK)
+            p.drawText(badge.boundingRect(), Qt.AlignmentFlag.AlignCenter, text)
+
+
+class Dash(QWidget):
+    """Snowberry padded rail over a Caribbean Blue dash, chrome between."""
+
+    HEIGHT = 238
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(self.HEIGHT)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(14, 44, 14, 12)
+        row.setSpacing(10)
+        small = QVBoxLayout()
+        small.setSpacing(6)
+        self.fuel = FuelGauge(self)
+        self.clock = DashClock(self)
+        small.addWidget(self.fuel)
+        small.addWidget(self.clock)
+        small.addStretch(1)
+        row.addLayout(small)
+        self.wheel = SteeringWheel(self)
+        row.addWidget(self.wheel, 0, Qt.AlignmentFlag.AlignTop)
+        self.gauge = Speedometer(self)
+        row.addWidget(self.gauge, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.radio = Radio(self)
+        row.addWidget(self.radio, 0, Qt.AlignmentFlag.AlignTop)
+        self.glove = GloveBox(self)
+        row.addWidget(self.glove, 1, Qt.AlignmentFlag.AlignTop)
+        self.go = Starter(self)
+        row.addWidget(self.go, 0, Qt.AlignmentFlag.AlignTop)
+
+    def say(self, caption, detail=""):
+        self.radio.say(caption, detail)
+
+    def paintEvent(self, _):
+        p = aa(self)
+        w, h = float(self.width()), float(self.height())
+        top = QPainterPath(QPointF(0, 26))
+        top.quadTo(QPointF(w / 2, -6), QPointF(w, 26))
+        rail_bottom = QPainterPath(QPointF(w, 46))
+        rail_bottom.quadTo(QPointF(w / 2, 14), QPointF(0, 46))
+        rail = QPainterPath(top)
+        rail.connectPath(rail_bottom)
+        rail.closeSubpath()
+        body = QPainterPath(QPointF(0, 40))
+        body.quadTo(QPointF(w / 2, 8), QPointF(w, 40))
+        body.lineTo(w, h + 4)
+        body.lineTo(0, h + 4)
+        body.closeSubpath()
+        toon.paint(p, body, CARIBBEAN, gloss=False, outline=2.6)
+        # soft gloss along the curve of the dash
+        p.save()
+        p.setClipPath(body)
+        g = QPainterPath(QPointF(0, 58))
+        g.quadTo(QPointF(w / 2, 26), QPointF(w, 58))
+        g.lineTo(w, 84)
+        g.quadTo(QPointF(w / 2, 52), QPointF(0, 84))
+        g.closeSubpath()
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(255, 255, 255, 40))
+        p.drawPath(g)
+        p.restore()
+        toon.paint(p, rail, SNOWBERRY, outline=2.6)
+        # chrome trim under the rail
+        trim = QPainterPath(QPointF(0, 45))
+        trim.quadTo(QPointF(w / 2, 13), QPointF(w, 45))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.setPen(toon.pen(OUTLINE, 7.0))
+        p.drawPath(trim)
+        p.setPen(QPen(toon.chrome_brush(QRectF(0, 20, w, 30)), 4.4,
+                      Qt.PenStyle.SolidLine, Qt.PenCapStyle.FlatCap))
+        p.drawPath(trim)
 
 
 # ---------------------------------------------------------------------------
-# The shots
+# The shots, seen through the windshield
 # ---------------------------------------------------------------------------
 
 KIND_ROLE = Qt.ItemDataRole.UserRole
@@ -951,7 +1177,7 @@ DATA_ROLE = Qt.ItemDataRole.UserRole + 2
 
 
 def short_time(dt):
-    return dt.strftime("%b %d  %H:%M:%S") if dt else "?"
+    return dt.strftime("%b %d, %H:%M") if dt else "?"
 
 
 class ShotDelegate(QStyledItemDelegate):
@@ -962,143 +1188,205 @@ class ShotDelegate(QStyledItemDelegate):
     def sizeHint(self, option, index):
         kind = index.data(KIND_ROLE)
         if kind in ("batch", "session"):
-            w = max(200, self.owner.viewport().width() - 14)
-            return QSize(w, 34 if kind == "batch" else
-                         20 + 14 * len(index.data(DATA_ROLE)["lines"]))
+            w = max(260, self.owner.viewport().width() - 18)
+            if kind == "batch":
+                return QSize(w, 70)
+            return QSize(w, 42 + 17 * len(index.data(DATA_ROLE)["lines"]))
         return QSize(CELL_W, CELL_H)
 
     def paint(self, p, option, index):
         kind = index.data(KIND_ROLE)
         p.save()
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         if kind == "batch":
-            self._batch(p, option.rect, index.data(DATA_ROLE))
+            self._plate(p, QRectF(option.rect), index.data(DATA_ROLE))
         elif kind == "session":
-            self._session(p, option.rect, index.data(DATA_ROLE))
+            self._sign(p, QRectF(option.rect), index.data(DATA_ROLE))
         else:
-            self._shot(p, option, index)
+            self._print(p, option, index)
         p.restore()
 
-    def _batch(self, p, r, d):
-        box = QRect(r.left() + 2, r.top() + 6, r.width() - 4, r.height() - 8)
-        paint_panel(p, box)
-        chrome_strip(p, QRect(box.left(), box.bottom() - 2, box.width(), 3))
-        p.setPen(QPen(DARK, 1))
-        p.drawRect(box.adjusted(0, 0, -1, -1))
-        p.setFont(ui_font(8, bold=True))
-        p.setPen(QColor(20, 45, 70, 130))
-        tr = box.adjusted(10, 0, -10, -3)
-        p.drawText(tr.translated(1, 1), Qt.AlignmentFlag.AlignVCenter, d["title"])
-        p.setPen(WHITE)
-        p.drawText(tr, Qt.AlignmentFlag.AlignVCenter, d["title"])
-        p.setFont(ui_font(8))
-        p.drawText(tr, Qt.AlignmentFlag.AlignVCenter |
-                   Qt.AlignmentFlag.AlignRight, d["right"])
+    def _plate(self, p, r, d):
+        """Each pull wears a 1950s licence plate."""
+        plate = QRectF(r.left() + 6, r.top() + 10, min(r.width() - 12, 470), 52)
+        path = toon.rounded(plate, 9)
+        toon.drop_shadow(p, path, 3, 4, 70)
+        toon.paint(p, path, {"light": "#FFFDF3", "base": SNOWBERRY["base"],
+                             "shade": SNOWBERRY["shade"]}, outline=2.6)
+        inner = plate.adjusted(5, 5, -5, -5)
+        p.setPen(toon.pen(CARIBBEAN["deep"], 2.2))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawRoundedRect(inner, 6, 6)
+        for x in (plate.left() + 22, plate.right() - 22):
+            p.setBrush(toon.chrome_brush(QRectF(x - 5, plate.top() + 8, 10, 10)))
+            p.setPen(toon.pen(OUTLINE, 1.6))
+            p.drawEllipse(QPointF(x, plate.top() + 13), 4.2, 4.2)
+        p.setFont(toon.body_font(6.5, QFont.Weight.Black))
+        p.setPen(QColor(MARDI_GRAS["base"]))
+        p.drawText(QRectF(inner.left(), inner.top() + 1, inner.width(), 10),
+                   Qt.AlignmentFlag.AlignCenter, d["top"])
+        font = toon.display_font(15)
+        p.setFont(font)
+        text = p.fontMetrics().elidedText(d["title"], Qt.TextElideMode.ElideRight,
+                                          int(inner.width() - 40))
+        p.setPen(QColor(CARIBBEAN["deep"]))
+        p.drawText(QRectF(inner.left(), inner.top() + 10, inner.width(),
+                          inner.height() - 10), Qt.AlignmentFlag.AlignCenter, text)
+        toon.outlined_text(p, QRectF(plate.right() + 14, plate.top(),
+                                     r.right() - plate.right() - 18, plate.height()),
+                           Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                           d["right"], toon.display_font(10), WHITE, OUTLINE, 2.8)
 
-    def _session(self, p, r, d):
-        # Windows 95's etched separator with the session's story on it.
-        y = r.top() + 9
-        p.setFont(ui_font(8, bold=True))
-        title = d["title"]
-        tw = p.fontMetrics().horizontalAdvance(title)
-        p.setPen(QPen(SHADOW, 1))
-        p.drawLine(r.left() + tw + 12, y, r.right() - 4, y)
-        p.setPen(QPen(WHITE, 1))
-        p.drawLine(r.left() + tw + 12, y + 1, r.right() - 4, y + 1)
-        p.setPen(PAINT_INK)
-        p.drawText(QRect(r.left() + 4, r.top(), tw + 4, 18),
-                   Qt.AlignmentFlag.AlignVCenter, title)
-        p.setFont(ui_font(8))
-        for n, (text, colour) in enumerate(d["lines"]):
+    def _sign(self, p, r, d):
+        """A wooden signpost for each session, and a ticket saying how it
+        will be dated."""
+        p.setFont(toon.display_font(11))
+        tw = p.fontMetrics().horizontalAdvance(d["title"])
+        board = QRectF(r.left() + 10, r.top() + 6, tw + 30, 28)
+        post = QRectF(board.left() + 12, board.bottom() - 2, 8, 12)
+        p.setBrush(QColor(WOOD["shade"]))
+        p.setPen(toon.pen(OUTLINE, 2.0))
+        p.drawRoundedRect(post, 2, 2)
+        path = QPainterPath()
+        path.addPolygon(QPolygonF([
+            QPointF(board.left(), board.top() + 3), QPointF(board.right() - 12,
+                                                            board.top()),
+            QPointF(board.right(), board.center().y()),
+            QPointF(board.right() - 12, board.bottom()),
+            QPointF(board.left(), board.bottom() - 2)]))
+        path.closeSubpath()
+        toon.drop_shadow(p, path, 2, 3, 60)
+        toon.paint(p, path, WOOD, outline=2.4)
+        p.setPen(toon.pen(QColor(WOOD["shade"]), 1.2))
+        for i in range(2):
+            y = board.top() + 9 + i * 10
+            p.drawLine(QPointF(board.left() + 6, y), QPointF(board.left() + 14, y))
+        p.setPen(QColor("#4A2C12"))
+        p.drawText(QRectF(board.left() + 10, board.top(), tw + 10, board.height()),
+                   Qt.AlignmentFlag.AlignVCenter, d["title"])
+        count = QRectF(board.right() + 10, board.top(), 160, board.height())
+        toon.outlined_text(p, count, Qt.AlignmentFlag.AlignVCenter |
+                           Qt.AlignmentFlag.AlignLeft, d["count"],
+                           toon.display_font(10), WHITE, OUTLINE, 2.6)
+        lines = d["lines"]
+        p.setFont(toon.body_font(8.5, QFont.Weight.Bold))
+        fm = p.fontMetrics()
+        width = max(fm.horizontalAdvance(t) for t, _ in lines) + 24
+        ticket = QRectF(r.left() + 30, board.bottom() + 6,
+                        min(width, r.width() - 40), 8 + 17 * len(lines))
+        tp = toon.rounded(ticket, 7)
+        toon.drop_shadow(p, tp, 2, 3, 45)
+        p.setBrush(QColor(255, 253, 244, 240))
+        p.setPen(toon.pen(OUTLINE, 2.0))
+        p.drawPath(tp)
+        for n, (text, colour) in enumerate(lines):
             p.setPen(QColor(colour))
-            p.drawText(QRect(r.left() + 18, r.top() + 18 + 14 * n,
-                             r.width() - 24, 14),
-                       Qt.AlignmentFlag.AlignVCenter, text)
+            p.drawText(QRectF(ticket.left() + 12, ticket.top() + 4 + 17 * n,
+                              ticket.width() - 18, 17),
+                       Qt.AlignmentFlag.AlignVCenter,
+                       fm.elidedText(text, Qt.TextElideMode.ElideRight,
+                                     int(ticket.width() - 18)))
 
-    def _shot(self, p, option, index):
-        r = option.rect
+    def _print(self, p, option, index):
+        """A snapshot print: white border, the date written on it in pen."""
+        r = QRectF(option.rect)
         d = index.data(DATA_ROLE)
         selected = bool(option.state & QStyle.StateFlag.State_Selected)
-        frame = QRect(r.left() + (r.width() - THUMB_W - 6) // 2, r.top() + 4,
-                      THUMB_W + 6, THUMB_H + 6)
-        p.fillRect(frame, FIELD)
-        inner = bevel(p, frame, raised=False)
+        hover = bool(option.state & QStyle.StateFlag.State_MouseOver)
+        lift = -3 if selected else (-1 if hover else 0)
+        card = QRectF(r.left() + 8, r.top() + 10 + lift, r.width() - 16,
+                      r.height() - 16)
+        cp = toon.rounded(card, 5)
+        toon.drop_shadow(p, cp, 3, 5 - lift, 70)
+        if selected:
+            p.setPen(toon.pen(SUNBURST["base"], 8))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawPath(cp)
+        p.setBrush(QColor("#FFFEFA"))
+        p.setPen(toon.pen(OUTLINE, 2.2))
+        p.drawPath(cp)
+        photo = QRectF(card.left() + 6, card.top() + 6, card.width() - 12, THUMB_H)
         img = self.owner.thumb(d["key"])
-        area = inner.adjusted(1, 1, -1, -1)
         if img is not None and img.isNull():
-            # Windows' broken-picture mark: the file is not a readable image
-            # (a card that is failing often leaves a few of these).
-            p.fillRect(area, QColor("#F4F1E8"))
-            mark = QRect(area.center().x() - 8, area.center().y() - 14, 16, 16)
-            p.setPen(QPen(SHADOW, 1))
-            p.setBrush(WHITE)
-            p.drawRect(mark)
-            p.setPen(QPen(BAD, 2))
-            p.drawLine(mark.left() + 4, mark.top() + 4,
-                       mark.right() - 3, mark.bottom() - 3)
-            p.drawLine(mark.right() - 3, mark.top() + 4,
-                       mark.left() + 4, mark.bottom() - 3)
-            p.setPen(INK_SOFT)
-            p.setFont(ui_font(7))
-            p.drawText(area.adjusted(0, 22, 0, 0), Qt.AlignmentFlag.AlignCenter,
-                       "cannot show")
+            p.fillRect(photo, QColor("#EDE6D6"))
+            face = photo.center()
+            p.setPen(toon.pen(INK_SOFT, 2.2))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawEllipse(face, 15, 15)
+            for dx in (-5, 5):
+                p.drawLine(QPointF(face.x() + dx - 2, face.y() - 6),
+                           QPointF(face.x() + dx + 2, face.y() - 2))
+                p.drawLine(QPointF(face.x() + dx + 2, face.y() - 6),
+                           QPointF(face.x() + dx - 2, face.y() - 2))
+            p.drawArc(QRectF(face.x() - 7, face.y() + 3, 14, 10), 20 * 16, 140 * 16)
+            p.setFont(toon.body_font(7, QFont.Weight.Bold))
+            p.drawText(QRectF(photo.left(), photo.bottom() - 16, photo.width(), 14),
+                       Qt.AlignmentFlag.AlignCenter, "can't show this one")
         elif img is not None:
-            scaled = img.scaled(area.size(), Qt.AspectRatioMode.KeepAspectRatio,
+            scaled = img.scaled(int(photo.width() * 2), int(photo.height() * 2),
+                                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                                 Qt.TransformationMode.SmoothTransformation)
-            x = area.left() + (area.width() - scaled.width()) // 2
-            y = area.top() + (area.height() - scaled.height()) // 2
-            p.drawImage(x, y, scaled)
+            p.save()
+            p.setClipRect(photo)
+            sw, sh = scaled.width() / 2, scaled.height() / 2
+            p.drawImage(QRectF(photo.center().x() - sw / 2,
+                               photo.center().y() - sh / 2, sw, sh), scaled)
+            p.restore()
         else:
-            p.fillRect(area, QColor("#E9E5D8"))
-            p.setPen(SHADOW)
-            p.setFont(ui_font(7))
-            p.drawText(area, Qt.AlignmentFlag.AlignCenter, "...")
+            p.fillRect(photo, QColor("#E7EEF0"))
+            p.setFont(toon.display_font(12))
+            p.setPen(QColor(CARIBBEAN["shade"]))
+            p.drawText(photo, Qt.AlignmentFlag.AlignCenter, "...")
         if d["video"]:
-            # sprocket holes: this one moves
-            p.fillRect(QRect(area.left(), area.top(), 7, area.height()),
-                       QColor(20, 20, 20, 200))
-            p.fillRect(QRect(area.right() - 6, area.top(), 7, area.height()),
-                       QColor(20, 20, 20, 200))
-            for yy in range(area.top() + 3, area.bottom() - 3, 8):
-                p.fillRect(QRect(area.left() + 2, yy, 3, 4), QColor("#F0EBDD"))
-                p.fillRect(QRect(area.right() - 4, yy, 3, 4), QColor("#F0EBDD"))
-        if selected:
-            p.fillRect(area, QColor(46, 94, 138, 90))
-        # shot number, as 'digicarlo plan' prints it
-        p.setFont(ui_font(7))
+            for x in (photo.left(), photo.right() - 8):
+                p.fillRect(QRectF(x, photo.top(), 8, photo.height()),
+                           QColor(15, 20, 22, 215))
+                y = photo.top() + 3
+                while y < photo.bottom() - 5:
+                    p.fillRect(QRectF(x + 2.5, y, 3, 4), QColor("#F4EFE1"))
+                    y += 9
+            play = QPainterPath()
+            cx, cy = photo.center().x(), photo.center().y()
+            play.addPolygon(QPolygonF([QPointF(cx - 7, cy - 10), QPointF(cx + 11, cy),
+                                       QPointF(cx - 7, cy + 10)]))
+            play.closeSubpath()
+            toon.paint(p, play, SNOWBERRY, gloss=False, outline=2.0)
+        p.setPen(toon.pen(OUTLINE, 1.6))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawRect(photo)
+        # the shot number, as 'digicarlo plan' prints it
         num = str(d["number"])
-        nw = p.fontMetrics().horizontalAdvance(num) + 6
-        badge = QRect(frame.left() + 3, frame.top() + 3, nw, 12)
-        p.fillRect(badge, QColor(255, 255, 225, 230))
-        p.setPen(QPen(INK, 1))
-        p.drawRect(badge.adjusted(0, 0, -1, -1))
-        p.drawText(badge, Qt.AlignmentFlag.AlignCenter, num)
+        p.setFont(toon.display_font(8))
+        nw = max(22, p.fontMetrics().horizontalAdvance(num) + 12)
+        badge = toon.rounded(QRectF(card.left() - 6, card.top() - 8, nw, 20), 10)
+        toon.paint(p, badge, SUNBURST, gloss=False, outline=2.0)
+        p.setPen(INK)
+        p.drawText(badge.boundingRect(), Qt.AlignmentFlag.AlignCenter, num)
         if d["pinned"]:
-            pin = QRect(frame.right() - 13, frame.top() + 3, 10, 10)
-            p.setPen(QPen(INK, 1))
-            p.setBrush(QColor("#E0A526") if d["pinned"] == "set" else
-                       QColor("#9AA3AC"))
-            p.drawEllipse(pin)
-        # caption: name, then the date it will get
-        p.setFont(ui_font(8))
-        name_rect = QRect(r.left() + 2, frame.bottom() + 4, r.width() - 4, 14)
+            pin = QPointF(card.center().x(), card.top() - 1)
+            tone = MARDI_GRAS if d["pinned"] == "set" else GREY
+            p.setPen(toon.pen(OUTLINE, 1.8))
+            p.drawLine(pin, QPointF(pin.x(), pin.y() + 9))
+            toon.paint(p, toon.circle(QPointF(pin.x(), pin.y() - 2), 6.5), tone,
+                       outline=2.0)
+        p.setFont(toon.body_font(8, QFont.Weight.Black))
         name = p.fontMetrics().elidedText(d["name"], Qt.TextElideMode.ElideMiddle,
-                                          name_rect.width() - 4)
-        if selected:
-            nw = p.fontMetrics().horizontalAdvance(name) + 6
-            hl = QRect(name_rect.center().x() - nw // 2, name_rect.top(), nw, 14)
-            p.fillRect(hl, PAINT_DEEP)
-            p.setPen(WHITE)
-        else:
-            p.setPen(INK)
-        p.drawText(name_rect, Qt.AlignmentFlag.AlignCenter, name)
-        p.setPen(PAINT_INK if d["pinned"] else INK_SOFT)
-        p.setFont(ui_font(7))
-        p.drawText(QRect(r.left(), name_rect.bottom() + 1, r.width(), 12),
+                                          int(card.width() - 8))
+        p.setPen(INK)
+        p.drawText(QRectF(card.left(), photo.bottom() + 4, card.width(), 15),
+                   Qt.AlignmentFlag.AlignCenter, name)
+        p.setFont(toon.hand_font(8.5))
+        p.setPen(QColor(MARDI_GRAS["shade"]) if d["pinned"] == "set"
+                 else QColor("#1D4F9A"))
+        p.drawText(QRectF(card.left(), photo.bottom() + 18, card.width(), 18),
                    Qt.AlignmentFlag.AlignCenter, d["when"])
 
 
 class ShotList(QListWidget):
-    """Every shot waiting for the library, grouped by pull and session.
+    """Every shot waiting for the library, grouped by pull and session, in
+    front of the scenery.
 
     One list, so a shift-click can run across sessions. Headers are full-width
     items, which makes the icon view start a fresh row after each.
@@ -1116,22 +1404,33 @@ class ShotList(QListWidget):
         self.setMovement(QListView.Movement.Static)
         self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.setUniformItemSizes(False)
-        self.setSpacing(2)
-        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setSpacing(3)
+        self.setMouseTracking(True)
+        self.setFrameShape(QListWidget.Shape.NoFrame)
         self.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.verticalScrollBar().setSingleStep(24)
         self.setItemDelegate(ShotDelegate(self))
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.viewport().setAutoFillBackground(False)
         self.itemSelectionChanged.connect(self.selection_changed)
         self.itemClicked.connect(self._clicked)
         self.empty_text = ""
+        self._scene = None
 
     def thumb(self, key):
         return self.owner.thumb(key)
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
+        self._scene = None
         # Headers are as wide as the view; tell the layout they changed.
         self.doItemsLayout()
+
+    def scrollContentsBy(self, dx, dy):
+        # The scenery stays put while the prints scroll past it, so the
+        # whole view repaints rather than being shifted.
+        super().scrollContentsBy(dx, dy)
+        self.viewport().update()
 
     def _clicked(self, item):
         if item.data(KIND_ROLE) != "session":
@@ -1150,14 +1449,69 @@ class ShotList(QListWidget):
                 if it.data(KIND_ROLE) == "shot"]
 
     def paintEvent(self, e):
-        super().paintEvent(e)
+        vp = self.viewport()
+        size = vp.size()
+        if self._scene is None or self._scene.size() != size:
+            self._scene = toon.scenery(size.width(), size.height())
+        p = QPainter(vp)
+        p.drawPixmap(0, 0, self._scene)
         if self.count() == 0 and self.empty_text:
-            p = QPainter(self.viewport())
-            p.setPen(INK_SOFT)
-            p.setFont(ui_font(8))
-            p.drawText(self.viewport().rect().adjusted(30, 30, -30, -30),
-                       Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
-                       self.empty_text)
+            self._bubble(p, QRectF(vp.rect()))
+        p.end()
+        super().paintEvent(e)
+
+    def _bubble(self, p, r):
+        """DigiCarlo, the camera, says what to do next."""
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w = min(430.0, r.width() - 160)
+        p.setFont(toon.body_font(10, QFont.Weight.Bold))
+        fm = p.fontMetrics()
+        text_rect = fm.boundingRect(QRect(0, 0, int(w - 40), 1000),
+                                    Qt.TextFlag.TextWordWrap, self.empty_text)
+        h = text_rect.height() + 36
+        bubble = QRectF(r.center().x() - w / 2 + 50, r.top() + max(20, r.height() * 0.18),
+                        w, h)
+        path = toon.rounded(bubble, 22)
+        tail = QPainterPath()
+        tail.addPolygon(QPolygonF([QPointF(bubble.left() + 30, bubble.bottom() - 8),
+                                   QPointF(bubble.left() - 26, bubble.bottom() + 34),
+                                   QPointF(bubble.left() + 62, bubble.bottom() - 8)]))
+        shape = path.united(tail)
+        toon.drop_shadow(p, shape, 3, 5, 60)
+        p.setBrush(QColor("#FFFFFF"))
+        p.setPen(toon.pen(OUTLINE, 2.6))
+        p.drawPath(shape)
+        p.setPen(INK)
+        p.drawText(bubble.adjusted(20, 16, -20, -16), Qt.TextFlag.TextWordWrap |
+                   Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                   self.empty_text)
+        p.drawPixmap(QRectF(bubble.left() - 120, bubble.bottom() + 6, 96, 96),
+                     icon_pixmap(192), QRectF(0, 0, 192, 192))
+
+
+class Windshield(QWidget):
+    """A chrome-framed view of the scenery with the shots in it."""
+
+    def __init__(self, child, parent=None):
+        super().__init__(parent)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(9, 9, 9, 6)
+        lay.addWidget(child)
+
+    def paintEvent(self, _):
+        p = aa(self)
+        r = QRectF(self.rect()).adjusted(2, 2, -2, 1)
+        frame = toon.rounded(r, 16)
+        hole = toon.rounded(r.adjusted(7, 7, -7, -4), 10)
+        ring = frame.subtracted(hole)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(toon.chrome_brush(r))
+        p.drawPath(ring)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.setPen(toon.pen(OUTLINE, 2.6))
+        p.drawPath(frame)
+        p.setPen(toon.pen(OUTLINE, 2.0))
+        p.drawPath(hole)
 
 
 # ---------------------------------------------------------------------------
@@ -1250,8 +1604,8 @@ class ThumbLoader(QThread):
             reader.setAutoTransform(True)
             size = reader.size()
             if size.isValid():
-                reader.setScaledSize(size.scaled(box,
-                                                 Qt.AspectRatioMode.KeepAspectRatio))
+                reader.setScaledSize(size.scaled(
+                    box, Qt.AspectRatioMode.KeepAspectRatioByExpanding))
             img = reader.read()
             if not img.isNull():
                 return img
@@ -1285,12 +1639,10 @@ class ThumbLoader(QThread):
 
 
 # ---------------------------------------------------------------------------
-# Dialogs
+# Dialogs: Windows 95, in Caribbean Blue
 # ---------------------------------------------------------------------------
 
 class Win95Dialog(QDialog):
-    """A frameless dialog wearing the same title bar as the main window."""
-
     def __init__(self, title, parent=None):
         super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.Dialog |
@@ -1304,13 +1656,13 @@ class Win95Dialog(QDialog):
         outer.addWidget(self.bar)
         self.body = QWidget(self)
         self.lay = QVBoxLayout(self.body)
-        self.lay.setContentsMargins(12, 12, 12, 12)
+        self.lay.setContentsMargins(14, 14, 14, 14)
         self.lay.setSpacing(10)
         outer.addWidget(self.body)
 
     def paintEvent(self, _):
         p = QPainter(self)
-        p.fillRect(self.rect(), CREAM)
+        p.fillRect(self.rect(), FACE)
         bevel(p, self.rect(), raised=True)
 
     def buttons(self, *specs):
@@ -1319,7 +1671,8 @@ class Win95Dialog(QDialog):
         made = []
         for text, role in specs:
             b = QPushButton(text, self)
-            b.setMinimumWidth(75)
+            b.setMinimumWidth(84)
+            b.setMinimumHeight(28)
             if role == "accept":
                 b.setDefault(True)
                 b.clicked.connect(self.accept)
@@ -1332,30 +1685,23 @@ class Win95Dialog(QDialog):
 
 
 def glyph_label(kind):
-    """Windows 95's message-box icons, redrawn."""
-    pm = QPixmap(32, 32)
+    pm = QPixmap(72, 72)
+    pm.setDevicePixelRatio(2.0)
     pm.fill(Qt.GlobalColor.transparent)
     p = QPainter(pm)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
-    p.setPen(QPen(INK, 1))
+    c = QPointF(18, 18)
     if kind == "error":
-        p.setBrush(QColor("#E0301E"))
-        p.drawEllipse(QRectF(2, 2, 28, 28))
-        p.setPen(QPen(WHITE, 3.2))
-        p.drawLine(QPointF(10, 10), QPointF(22, 22))
-        p.drawLine(QPointF(22, 10), QPointF(10, 22))
-    elif kind == "question":
-        p.setBrush(WHITE)
-        p.drawEllipse(QRectF(2, 2, 28, 28))
-        p.setPen(PAINT_DEEP)
-        p.setFont(ui_font(15, bold=True))
-        p.drawText(QRectF(2, 2, 28, 28), Qt.AlignmentFlag.AlignCenter, "?")
+        toon.paint(p, toon.circle(c, 15), MARDI_GRAS, outline=2.2)
+        p.setPen(toon.pen(WHITE, 3.4))
+        p.drawLine(QPointF(12, 12), QPointF(24, 24))
+        p.drawLine(QPointF(24, 12), QPointF(12, 24))
     else:
-        p.setBrush(WHITE)
-        p.drawEllipse(QRectF(2, 2, 28, 28))
-        p.setPen(PAINT_DEEP)
-        p.setFont(ui_font(15, bold=True))
-        p.drawText(QRectF(2, 2, 28, 28), Qt.AlignmentFlag.AlignCenter, "i")
+        toon.paint(p, toon.circle(c, 15), SUNBURST if kind == "question"
+                   else CARIBBEAN, outline=2.2)
+        toon.outlined_text(p, QRectF(3, 3, 30, 30), Qt.AlignmentFlag.AlignCenter,
+                           "?" if kind == "question" else "i",
+                           toon.display_font(13), WHITE, OUTLINE, 2.6)
     p.end()
     lab = QLabel()
     lab.setPixmap(pm)
@@ -1371,7 +1717,7 @@ def message(parent, title, text, kind="info", ask=None):
     row.addWidget(glyph_label(kind))
     lab = QLabel(text, dlg)
     lab.setWordWrap(True)
-    lab.setMinimumWidth(320)
+    lab.setMinimumWidth(340)
     lab.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
     row.addWidget(lab, 1)
     dlg.lay.addLayout(row)
@@ -1393,9 +1739,8 @@ class DateDialog(Win95Dialog):
         intro = QLabel("%d shot%s selected (%s)." % (
             n, "" if n == 1 else "s", describe_numbers([s.number for s in shots])),
             self)
-        intro.setFont(ui_font(8, bold=True))
+        intro.setFont(ui_font(9.5, bold=True))
         self.lay.addWidget(intro)
-
         self.group = QButtonGroup(self)
         self.start = QRadioButton("Taken starting at:", self)
         self.when = QDateTimeEdit(self)
@@ -1410,10 +1755,9 @@ class DateDialog(Win95Dialog):
         note = QLabel("The rest follow with the gaps the camera's clock "
                       "recorded between them.", self)
         note.setWordWrap(True)
-        note.setContentsMargins(22, 0, 0, 0)
-        note.setStyleSheet("color: #5E5A50;")
+        note.setContentsMargins(24, 0, 0, 0)
+        note.setStyleSheet("color: #4A5A60;")
         self.lay.addWidget(note)
-
         self.camera = QRadioButton("Keep the camera's own dates  (%s)" % (
             timeplan.fmt_span(min(cams), max(cams)) if cams else
             "this camera has no clock"), self)
@@ -1442,7 +1786,7 @@ class FoldersDialog(Win95Dialog):
         if first_run:
             hello = QLabel("Welcome to DigiCarlo. Where should pictures go?",
                            self)
-            hello.setFont(ui_font(8, bold=True))
+            hello.setFont(ui_font(9.5, bold=True))
             self.lay.addWidget(hello)
         self.fields = {}
         for key, title, help_ in (
@@ -1453,11 +1797,11 @@ class FoldersDialog(Win95Dialog):
                  "The camera's untouched originals. Keep this out of anything "
                  "that syncs, or every photo arrives twice.")):
             lab = QLabel(title, self)
-            lab.setFont(ui_font(8, bold=True))
+            lab.setFont(ui_font(9.5, bold=True))
             self.lay.addWidget(lab)
             row = QHBoxLayout()
             edit = QLineEdit(getattr(settings, key), self)
-            edit.setMinimumWidth(360)
+            edit.setMinimumWidth(380)
             browse = QPushButton("Browse...", self)
             browse.clicked.connect(lambda _, e=edit, t=title: self._browse(e, t))
             row.addWidget(edit, 1)
@@ -1465,7 +1809,7 @@ class FoldersDialog(Win95Dialog):
             self.lay.addLayout(row)
             h = QLabel(help_, self)
             h.setWordWrap(True)
-            h.setStyleSheet("color: #5E5A50;")
+            h.setStyleSheet("color: #4A5A60;")
             self.lay.addWidget(h)
             self.fields[key] = edit
         self.buttons(("OK", "accept"), ("Cancel", "reject"))
@@ -1489,9 +1833,9 @@ class TextDialog(Win95Dialog):
         view = QPlainTextEdit(self)
         view.setReadOnly(True)
         view.setPlainText(text)
-        view.setMinimumSize(620, 360)
+        view.setMinimumSize(640, 380)
         f = QFont("DejaVu Sans Mono")
-        f.setPointSizeF(8)
+        f.setPointSizeF(9)
         view.setFont(f)
         self.lay.addWidget(view)
         self.buttons(("Close", "accept"))
@@ -1528,7 +1872,8 @@ class MainWindow(QWidget):
                             Qt.WindowType.FramelessWindowHint)
         self.setWindowTitle("DigiCarlo")
         self.setMouseTracking(True)
-        self.resize(1040, 720)
+        self.setMinimumSize(1100, 640)
+        self.resize(1180, 800)
         self.settings = settings or config.Settings()
         self.arc = archive.Archive(self.settings.archive)
         self.overrides = []
@@ -1540,6 +1885,7 @@ class MainWindow(QWidget):
         self.thumbs = {}
         self.asked = set()
         self.signature = None
+        self.last_ok = False
 
         outer = QVBoxLayout(self)
         m = self.BORDER
@@ -1552,49 +1898,24 @@ class MainWindow(QWidget):
         outer.addWidget(self.bar)
         outer.addWidget(self._menus())
 
-        body = QHBoxLayout()
-        body.setContentsMargins(8, 8, 8, 8)
-        body.setSpacing(8)
-        self.sources_panel = SourcePanel(self)
-        self.sources_panel.setFixedWidth(250)
-        self.sources_panel.pull.connect(self.pull)
-        self.sources_panel.rescan.connect(self.rescan)
-        self.sources_panel.pull_folder.connect(self.pull_folder)
-        body.addWidget(self.sources_panel)
-
-        right = QVBoxLayout()
-        right.setSpacing(6)
-        tools = QHBoxLayout()
-        tools.setSpacing(6)
-        head = QLabel("Waiting for the library", self)
-        head.setFont(ui_font(8, bold=True))
-        tools.addWidget(head)
-        tools.addStretch(1)
-        self.sel_label = QLabel("", self)
-        self.sel_label.setStyleSheet("color: #5E5A50;")
-        tools.addWidget(self.sel_label)
-        self.b_date = QPushButton("Set date...", self)
-        self.b_date.clicked.connect(self.set_date)
-        self.b_camera = QPushButton("Camera's date", self)
-        self.b_camera.clicked.connect(lambda: self.apply_rule("camera"))
-        self.b_auto = QPushButton("Automatic", self)
-        self.b_auto.clicked.connect(lambda: self.apply_rule("auto"))
-        self.b_skip = QPushButton("Leave out", self)
-        self.b_skip.clicked.connect(self.leave_out)
-        for b in (self.b_date, self.b_camera, self.b_auto, self.b_skip):
-            tools.addWidget(b)
-        right.addLayout(tools)
         self.list = ShotList(self)
         self.list.selection_changed.connect(self._selection_changed)
         self.list.customContextMenuRequested.connect(self._context_menu)
         self.list.itemDoubleClicked.connect(self._open_item)
-        right.addWidget(Sunken(self.list, self), 1)
-        body.addLayout(right, 1)
-        outer.addLayout(body, 1)
+        outer.addWidget(Windshield(self.list, self), 1)
 
-        self.dash = Dashboard(self)
-        self.dash.go.clicked.connect(self.develop)
-        self.dash.stop.clicked.connect(self.stop_job)
+        self.dash = Dash(self)
+        self.dash.go.clicked.connect(self._starter)
+        self.dash.wheel.clicked.connect(self.honk)
+        self.dash.glove.pull.connect(self.pull)
+        self.dash.glove.pull_folder.connect(self.pull_folder)
+        keys = self.dash.radio.keys
+        keys["date"].clicked.connect(self.set_date)
+        keys["camera"].clicked.connect(lambda: self.apply_rule("camera"))
+        keys["auto"].clicked.connect(lambda: self.apply_rule("auto"))
+        keys["skip"].clicked.connect(self.leave_out)
+        self.dash.radio.left.clicked.connect(self.show_log)
+        self.dash.radio.right.clicked.connect(self.choose_folders)
         outer.addWidget(self.dash)
         outer.addWidget(self._status_bar())
 
@@ -1627,9 +1948,10 @@ class MainWindow(QWidget):
 
     def _menus(self):
         bar = QMenuBar(self)
+        bar.setFont(ui_font(9))
         f = bar.addMenu("&File")
         self._act(f, "Pull from a &folder...", self.pull_folder)
-        self._act(f, "&Look for cameras again", self.rescan, "F5")
+        self._act(f, "&Look for cameras again", self.honk, "F5")
         f.addSeparator()
         self._act(f, "F&olders...", self.choose_folders)
         self._act(f, "Open the &library folder",
@@ -1649,6 +1971,10 @@ class MainWindow(QWidget):
         self._act(s, "&Bring back left-out shots", self.bring_back)
         s.addSeparator()
         self._act(s, "&Put in library", self.develop, "Ctrl+Return")
+        v = bar.addMenu("&View")
+        snd = self._act(v, "&Sounds", self._toggle_sounds)
+        snd.setCheckable(True)
+        snd.setChecked(self.settings.sounds)
         h = bar.addMenu("&Help")
         self._act(h, "&Activity log", self.show_log)
         self._act(h, "Check for &updates...", self.check_updates)
@@ -1675,19 +2001,19 @@ class MainWindow(QWidget):
         self.st_arc = StatusPanel("", w)
         self.st_arc.clicked.connect(self.choose_folders)
         self.st_count = StatusPanel("", w)
-        self.st_count.setFixedWidth(170)
+        self.st_count.setFixedWidth(190)
         row.addWidget(self.st_lib, 1)
         row.addWidget(self.st_arc, 1)
         row.addWidget(self.st_count)
         row.addWidget(SizeGrip(w), 0, Qt.AlignmentFlag.AlignBottom)
-        w.setFixedHeight(22)
+        w.setFixedHeight(25)
         return w
 
     # -- window frame ---------------------------------------------------------
 
     def paintEvent(self, _):
         p = QPainter(self)
-        p.fillRect(self.rect(), CREAM)
+        p.fillRect(self.rect(), FACE)
         bevel(p, self.rect(), raised=True)
 
     def changeEvent(self, e):
@@ -1769,6 +2095,14 @@ class MainWindow(QWidget):
         developed = sum(len(r.get("outputs") or [])
                         for r in self.arc.developed.values())
         self.dash.gauge.set_odometer(developed)
+        probe = self.settings.library
+        while probe and not os.path.exists(probe):
+            probe = os.path.dirname(probe)
+        try:
+            usage = shutil.disk_usage(probe or "/")
+            self.dash.fuel.set_space(usage.free, usage.total)
+        except OSError:
+            pass
 
     @staticmethod
     def _pretty(path):
@@ -1794,6 +2128,11 @@ class MainWindow(QWidget):
                 self.later(1500, self.rescan)
         self.signature = sig
 
+    def honk(self):
+        if self.settings.sounds:
+            toon.play("honk")
+        self.rescan()
+
     def rescan(self):
         if self.scan_job is not None and self.scan_job.isRunning():
             return
@@ -1809,7 +2148,7 @@ class MainWindow(QWidget):
     def _scanned(self, found):
         self.found = found
         busy = self.job is not None and self.job.isRunning()
-        self.sources_panel.set_sources(found, busy)
+        self.dash.glove.set_sources(found, busy)
 
     # -- planning ---------------------------------------------------------------
 
@@ -1840,9 +2179,10 @@ class MainWindow(QWidget):
         plan = self.plan
         if not plan.shots:
             self.list.empty_text = (
-                "Nothing is waiting for the library.\n\nPull from a camera or "
-                "card on the left. Its pictures are copied into the archive "
-                "untouched, then shown here with the dates they will get.")
+                "Nothing's waiting for the library!\n\nPick a camera or card "
+                "out of the glove box down there. Its pictures get copied "
+                "into the archive untouched, then they show up here with the "
+                "dates they'll get.")
             self.list.viewport().update()
             return
         self.list.empty_text = ""
@@ -1853,11 +2193,11 @@ class MainWindow(QWidget):
             item.setFlags(Qt.ItemFlag.ItemIsEnabled)
             item.setData(KIND_ROLE, "batch")
             item.setData(DATA_ROLE, {
-                "title": "%s  -  %d shot%s" % (batch.label, n,
-                                               "" if n == 1 else "s"),
-                "right": "taken off %s  (%s)" % (
-                    batch.anchor.strftime("%Y-%m-%d %H:%M"),
-                    brec.get("source_label") or "")})
+                "title": batch.label,
+                "top": "TAKEN OFF %s  -  %s" % (
+                    batch.anchor.strftime("%b %d %Y  %H:%M").upper(),
+                    (brec.get("source_label") or "").upper()),
+                "right": "%d shot%s" % (n, "" if n == 1 else "s")})
             self.list.addItem(item)
             for sess in [s for s in plan.sessions if s.batch is batch]:
                 self._add_session(sess, keep)
@@ -1870,29 +2210,28 @@ class MainWindow(QWidget):
         n = len(sess.shots)
         lines = []
         if c0 is None:
-            lines.append(("This camera keeps no clock; shots are a second "
-                          "apart in the order they were taken.", "#5E5A50"))
+            lines.append(("This camera keeps no clock; its shots go a second "
+                          "apart, in the order they were taken.", "#4A5A60"))
         else:
-            lines.append(("Camera's clock said %s" % timeplan.fmt_span(c0, c1),
-                          "#5E5A50"))
+            lines.append(("The camera's clock said %s" % timeplan.fmt_span(c0, c1),
+                          "#4A5A60"))
         for g in [g for g in plan.groups if g.session is sess]:
-            a, b = g.shots[0].number, g.shots[-1].number
             which = "" if len(g.shots) == n else (
                 "%s: " % describe_numbers([s.number for s in g.shots]).capitalize())
             if g.rule is None:
-                how, colour = "dated when taken off the camera", "#244B70"
+                how, colour = "when they came off the camera", CARIBBEAN["deep"]
             elif g.rule.when == "camera":
-                how, colour = "keeping the camera's dates", "#7A5A12"
+                how, colour = "keeping the camera's dates", "#8A5A00"
             else:
-                how, colour = "set by you", "#7A5A12"
-            lines.append(("%sWill be dated %s   (%s)" % (
+                how, colour = "set by you", MARDI_GRAS["shade"]
+            lines.append(("%sWill be dated %s  (%s)" % (
                 which, timeplan.fmt_span(g.start, g.end), how), colour))
         item = QListWidgetItem()
         item.setFlags(Qt.ItemFlag.ItemIsEnabled)
         item.setData(KIND_ROLE, "session")
         item.setData(DATA_ROLE, {
-            "title": "Session %d  -  %d shot%s" % (sess.number, n,
-                                                   "" if n == 1 else "s"),
+            "title": "Session %d" % sess.number,
+            "count": "%d shot%s" % (n, "" if n == 1 else "s"),
             "lines": lines, "keys": [s.key for s in sess.shots]})
         item.setToolTip("Click to select this session's shots")
         self.list.addItem(item)
@@ -1940,13 +2279,31 @@ class MainWindow(QWidget):
         keys = set(self.list.selected_keys())
         return [s for s in self.plan.shots if s.key in keys] if self.plan else []
 
+    def _busy_now(self):
+        return self.job is not None and self.job.isRunning()
+
     def _selection_changed(self):
         shots = self._selected_shots()
-        busy = self.job is not None and self.job.isRunning()
-        for b in (self.b_date, self.b_camera, self.b_auto, self.b_skip):
-            b.setEnabled(bool(shots) and not busy)
-        self.sel_label.setText("%d selected" % len(shots) if shots else
-                               "Select shots to date them")
+        busy = self._busy_now()
+        for k in self.dash.radio.keys.values():
+            k.setEnabled(bool(shots) and not busy)
+        if not busy:
+            self._idle_message()
+
+    def _idle_message(self):
+        shots = self._selected_shots()
+        n = len(self.plan.shots) if self.plan else 0
+        if shots:
+            self.dash.say("%s selected" % describe_numbers(
+                [s.number for s in shots]).capitalize(),
+                "Push a button below to change how they're dated.")
+        elif n:
+            self.dash.say("%d shot%s waiting" % (n, "" if n == 1 else "s"),
+                          "Check the dates up top. Pick shots to change them, "
+                          "then hit START.")
+        else:
+            self.dash.say("All clear!", "Pick a camera or card from the "
+                          "glove box to begin.")
 
     def list_select_all(self):
         for i in range(self.list.count()):
@@ -2039,12 +2396,11 @@ class MainWindow(QWidget):
     def _log(self, level, text):
         self.lines.append(("%-5s %s" % (level.upper(), text)))
         if level in ("warn", "error"):
-            self.dash.say(self.dash.caption.text(), text)
+            self.dash.say(self.dash.radio.caption, text)
 
     def _busy(self, on, caption=""):
-        self.sources_panel.set_busy(on)
-        self.dash.stop.setVisible(on)
-        self.dash.stop.setEnabled(on)
+        self.dash.glove.set_busy(on)
+        self.dash.wheel.setEnabled(not on)
         self.dash.gauge.set_lit(on)
         if on:
             self.dash.say(caption, "")
@@ -2054,21 +2410,18 @@ class MainWindow(QWidget):
 
     def _update_go(self):
         n = len(self.plan.shots) if self.plan else 0
-        busy = self.job is not None and self.job.isRunning()
-        self.dash.go.set_text("Put in library",
-                              "%d shot%s" % (n, "" if n == 1 else "s")
-                              if n else "")
-        self.dash.go.setEnabled(bool(n) and not busy)
-        if not busy:
-            if n:
-                self.dash.say("%d shot%s waiting" % (n, "" if n == 1 else "s"),
-                              "Check the dates above, change any that are "
-                              "wrong, then put them in the library.")
-            else:
-                self.dash.say("Ready", "Pull from a camera or card to begin.")
+        self.dash.go.set_state(n, self._busy_now())
+        if not self._busy_now():
+            self._idle_message()
+
+    def _starter(self):
+        if self._busy_now():
+            self.stop_job()
+        else:
+            self.develop()
 
     def run(self, fn, done, caption):
-        if self.job is not None and self.job.isRunning():
+        if self._busy_now():
             return
         job = Job(fn, self)
         job.line.connect(self._log)
@@ -2077,18 +2430,19 @@ class MainWindow(QWidget):
         job.failed.connect(self._failed)
         job.finished.connect(self._finished)
         self.job = job
-        self._busy(True, caption)
+        self.last_ok = False
         job.start()
+        self._busy(True, caption)
 
     def stop_job(self):
-        if self.job is not None and self.job.isRunning():
+        if self._busy_now():
             self.job.cancel.set()
-            self.dash.stop.setEnabled(False)
-            self.dash.say(self.dash.caption.text(), "Stopping after this file...")
+            self.dash.go.setEnabled(False)
+            self.dash.say(self.dash.radio.caption, "Stopping after this file...")
 
     def _step(self, done, total, caption):
         self.dash.gauge.set_value(done / total if total else 1.0)
-        self.dash.detail.setText(caption)
+        self.dash.say(self.dash.radio.caption, caption)
 
     def _failed(self, msg):
         self._log("error", msg)
@@ -2099,6 +2453,8 @@ class MainWindow(QWidget):
         self.dash.gauge.set_value(0)
         self.replan()
         self.rescan()
+        if self.last_ok and self.settings.sounds:
+            toon.play("beepbeep")
 
     def pull(self, src):
         arc_root = self.settings.archive
@@ -2137,12 +2493,11 @@ class MainWindow(QWidget):
                         text, failed, "" if failed == 1 else "s", names, more),
                     "error")
         self.lines.append("OUT   " + text)
-        self.later(0, lambda: self.dash.say("Pulled", text))
+        self.last_ok = not failed
+        self.later(0, lambda: self.dash.say("Pulled!", text))
 
     def develop(self):
-        if not self.plan or not self.plan.shots:
-            return
-        if self.job is not None and self.job.isRunning():
+        if not self.plan or not self.plan.shots or self._busy_now():
             return
         n = len(self.plan.shots)
         first = min(self.plan.times.values())
@@ -2174,9 +2529,14 @@ class MainWindow(QWidget):
                     "%s\n\nThese failed and are still waiting:\n\n%s"
                     % (text, names), "error")
         self.lines.append("OUT   " + text)
-        self.later(0, lambda: self.dash.say("Done", text))
+        self.last_ok = not res.failed
+        self.later(0, lambda: self.dash.say("Done!", text))
 
     # -- menus -----------------------------------------------------------------------
+
+    def _toggle_sounds(self, on):
+        self.settings.set("window", "sounds", "yes" if on else "no")
+        self.settings.save()
 
     def choose_folders(self, first_run=False):
         dlg = FoldersDialog(self, self.settings, first_run)
@@ -2224,7 +2584,9 @@ class MainWindow(QWidget):
         row = QHBoxLayout()
         row.setSpacing(16)
         icon = QLabel()
-        icon.setPixmap(icon_pixmap(64))
+        pm = icon_pixmap(160)
+        pm.setDevicePixelRatio(2.0)
+        icon.setPixmap(pm)
         icon.setAlignment(Qt.AlignmentFlag.AlignTop)
         row.addWidget(icon)
         text = QLabel(
@@ -2233,10 +2595,12 @@ class MainWindow(QWidget):
             "wrong clock, with the camera's gaps between shots kept.<br><br>"
             "Clips are remuxed to MP4 with the video untouched.<br><br>"
             "The SiPix Blink II is driven by Blinky %s.<br><br>"
+            "Painted Caribbean Blue and Snowberry White, the Nash "
+            "Metropolitan's own colours.<br><br>"
             "Licensed under the GNU LGPL, version 2.1." % (
                 __version__, blinky.__version__), dlg)
         text.setWordWrap(True)
-        text.setMinimumWidth(320)
+        text.setMinimumWidth(340)
         row.addWidget(text, 1)
         dlg.lay.addLayout(row)
         dlg.buttons(("OK", "accept"))
@@ -2250,7 +2614,7 @@ def main(argv=None):
     app.setDesktopFileName("digicarlo")
     app.setStyle("Windows")
     app.setPalette(win95_palette())
-    app.setFont(ui_font(8))
+    app.setFont(ui_font(9))
     themed = QIcon.fromTheme("digicarlo")
     app.setWindowIcon(themed if not themed.isNull() else app_icon())
     win = MainWindow()

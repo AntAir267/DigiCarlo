@@ -61,12 +61,17 @@ class WindowTests(unittest.TestCase):
                          now=D(2026, 9, 23, 14, 5, 0))
         self.win = self.gui.MainWindow(self.settings)
         self.win.poll.stop()
+        # Let the window's own start-up run now, while its folders exist.
+        self.app.processEvents()
         self.win.replan()
 
     def tearDown(self):
+        if self.win.scan_job is not None:
+            self.win.scan_job.wait(20000)
         self.win.loader.stop()
         self.win.loader.wait(2000)
         self.win.deleteLater()
+        self.app.processEvents()
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def items(self, kind):
@@ -114,6 +119,24 @@ class WindowTests(unittest.TestCase):
         self.assertFalse(g.grab().isNull())
         for size in (16, 32, 256):
             self.assertEqual(self.gui.icon_pixmap(size).width(), size)
+
+    def test_dashboard_follows_what_is_going_on(self):
+        dash = self.win.dash
+        keys = dash.radio.keys.values()
+        self.assertFalse(any(k.isEnabled() for k in keys))
+        self.assertEqual((dash.go.count, dash.go.busy), (5, False))
+        self.assertIn("5 shots waiting", dash.radio.caption)
+        self.win.list._clicked(self.items("session")[0])
+        self.assertTrue(all(k.isEnabled() for k in keys))
+        self.assertIn("selected", dash.radio.caption)
+        card = sources.Source("volume", "/dev/sdz1", "KODAK",
+                              detail="SD card, 512 MB")
+        cam = sources.Source("sipix", "sipix", "SiPix Blink II")
+        dash.glove.set_sources([card, cam])
+        glyphs = [it.glyph for it in dash.glove.items]
+        self.assertEqual(glyphs, ["sd", "sipix", "map"])
+        dash.glove.set_busy(True)
+        self.assertFalse(any(it.isEnabled() for it in dash.glove.items))
 
     def test_describe_numbers(self):
         self.assertEqual(self.gui.describe_numbers([3, 1, 2, 7, 9, 8]),
