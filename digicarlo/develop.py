@@ -104,6 +104,13 @@ class ExifTool:
             self.proc.wait(timeout=20)
         except Exception:
             self.proc.kill()
+            self.proc.wait()
+        finally:
+            for pipe in (self.proc.stdin, self.proc.stdout):
+                try:
+                    pipe.close()
+                except OSError:
+                    pass
 
 
 def still_date_args(when, make=None, model=None):
