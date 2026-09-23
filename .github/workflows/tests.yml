@@ -22,9 +22,14 @@ jobs:
           # rather than skip.
           sudo apt-get install -y libusb-1.0-0 libimage-exiftool-perl ffmpeg
           python -m pip install --upgrade pip
-          python -m pip install pyusb pillow
+          python -m pip install pyusb pillow numpy
+          # OpenCV only so the red-eye tests can check the numpy face
+          # finder against it; DigiCarlo itself never uses it.
+          python -m pip install opencv-python-headless || echo "no OpenCV; those checks will skip"
       - name: Run the test suite
-        run: python tests/test_digicarlo.py
+        run: |
+          python tests/test_digicarlo.py
+          python tests/test_redeye.py
 
   gui:
     runs-on: ubuntu-latest

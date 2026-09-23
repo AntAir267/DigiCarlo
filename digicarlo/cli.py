@@ -9,6 +9,7 @@
     digicarlo develop            put waiting shots in the library
     digicarlo skip / unskip      leave shots out, or bring them back
     digicarlo remember DIR       treat what is in DIR as already imported
+    digicarlo redeye PHOTO...    take the flash red out of eyes, into copies
     digicarlo doctor             check the tools and folders DigiCarlo needs
     digicarlo config             show or change settings
     digicarlo update             fetch a newer release
@@ -340,6 +341,44 @@ def cmd_skip(args, log, settings):
     return 0
 
 
+def cmd_redeye(args, log, settings):
+    try:
+        from . import redeye
+    except ImportError as exc:
+        log.error("red-eye removal needs numpy (%s)" % exc)
+        log.out("  Fix: sudo apt install python3-numpy")
+        return 1
+    from PIL import Image
+    out_dir = os.path.abspath(os.path.expanduser(args.out))
+    os.makedirs(out_dir, exist_ok=True)
+    eyes = photos = 0
+    for path in args.photos:
+        name = os.path.basename(path)
+        try:
+            with Image.open(path) as im:
+                im.load()
+                exif = im.info.get("exif")
+                fmt = "PNG" if name.lower().endswith(".png") else "JPEG"
+                fixed_img, fixed, faces = redeye.remove_red_eye(im)
+        except OSError as exc:
+            log.error("%s: %s" % (name, exc))
+            continue
+        if not fixed:
+            log.out("%s: %d face%s, no red eye" % (name, len(faces), "" if len(faces) == 1 else "s"))
+            continue
+        # Never over the original: a new name in the output folder.
+        dst = develop.free_name(out_dir, name)
+        extra = {"exif": exif} if exif else {}
+        if fmt == "JPEG":
+            extra["quality"] = 95
+        fixed_img.save(dst, fmt, **extra)
+        eyes += len(fixed)
+        photos += 1
+        log.out("%s: %d eye%s fixed -> %s" % (name, len(fixed), "" if len(fixed) == 1 else "s", dst))
+    log.out("%d eye%s fixed in %d photo%s." % (eyes, "" if eyes == 1 else "s", photos, "" if photos == 1 else "s"))
+    return 0
+
+
 def cmd_remember(args, log, settings):
     arc = archive.Archive(settings.archive)
     with arc.locked():
@@ -585,6 +624,13 @@ def build_parser():
     s.add_argument("which", nargs="*", metavar="NAME",
                    help="file names (default: all of them)")
     s.set_defaults(func=cmd_skip)
+
+    s = sub.add_parser("redeye", parents=[common],
+                       help="take the flash red out of eyes in photos")
+    s.add_argument("photos", nargs="+", metavar="PHOTO")
+    s.add_argument("--out", required=True, metavar="DIR",
+                   help="where the corrected copies go; originals are never changed")
+    s.set_defaults(func=cmd_redeye)
 
     s = sub.add_parser("remember", parents=[common],
                        help="treat what is in a folder as already imported")
