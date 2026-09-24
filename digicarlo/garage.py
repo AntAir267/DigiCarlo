@@ -11,6 +11,10 @@ Everything in the room that can be clicked does one thing:
     the crate of originals    open the archive folder
     the car                   honk, and look for cameras again
 
+and a few things that do nothing useful at all: the light over the car
+switches off (and on), and so do the car's headlights; the chrome script on
+the console knows who it is.
+
 and the console holds what has no place in the room:
 
     green screen    what is going on; click it for the activity log
@@ -122,6 +126,8 @@ class GarageWindow(win95.Window):
         self.classic = None
         self.today = datetime.date.today()
         self.room = "garage"            # or "board"
+        self.lamp_on = True             # the light over the car
+        self.beams = False              # the car's headlights
         self.board_key = 0              # a board key, while it is held down
         self.trust_next = None          # (batch id, camera) to ask about
         self.board = edits.Board(os.path.join(os.path.dirname(self.settings.path),
@@ -298,7 +304,10 @@ class GarageWindow(win95.Window):
         n = self.waiting()
         room = [k for k, on in (("card", bool(self.cards())),
                                 ("blink", bool(self.cameras())),
-                                ("safelight", n > 0)) if on]
+                                ("safelight", n > 0),
+                                ("beams", self.beams)) if on]
+        if not self.lamp_on:
+            room = ["dark"] + ["dark-" + k for k in room]
         self.garage_pic.set_pieces(room)
         self.garage_pic.invalidate()          # the tag, sticky and calendar change
         self.boardroom.pic.set_pieces(["trash"] if self.arc.skipped else [])
@@ -425,7 +434,8 @@ class GarageWindow(win95.Window):
             return r
 
         r = on("calendar")
-        p.setPen(QColor(255, 250, 240))
+        # white lettering is painted, not inked, so it has to dim itself
+        p.setPen(QColor(255, 250, 240) if self.lamp_on else QColor(112, 100, 92))
         fit(p, PRINTED, today.strftime("%B").upper(), QRectF(0, 0, 360, 120), 52)
         p.drawText(QRectF(0, 0, 400, 120), Qt.AlignmentFlag.AlignCenter,
                    today.strftime("%B").upper())
@@ -531,7 +541,10 @@ class GarageWindow(win95.Window):
             return {"door": "Darkroom: put %s in the library" % plural(n, "shot"),
                     "board": "Photo Board: choose dates for the shots waiting",
                     "crate": "Originals: open the archive folder",
-                    "car": "Honk: look for cameras again"}.get(spot, "")
+                    "car": "Honk: look for cameras again",
+                    "lamp": "The light: switch it %s" % ("off" if self.lamp_on else "on"),
+                    "headlights": "Headlights: %s" % ("off" if self.beams else "on")
+                    }.get(spot, "")
         return {"key1": "Check card: read every file, to see the card is sound",
                 "key2": "Eject: make the card safe to pull out",
                 "key3": "Erase card: empty it for next time, once all of it is archived",
@@ -540,6 +553,7 @@ class GarageWindow(win95.Window):
                 "knob-left": "Sound: %s" % ("on" if self.settings.sounds else "off"),
                 "knob-right": "Activity log",
                 "screen": "Activity log",
+                "badge": "DigiCarlo",
                 "start": "Stop after this file" if self.busy() else
                          "Put %s in the library" % plural(n, "shot")}.get(spot, "")
 
@@ -556,7 +570,9 @@ class GarageWindow(win95.Window):
              "door": self.develop,
              "board": lambda: self.go("board"),
              "crate": lambda: self._open(self.settings.archive),
-             "car": self.honk}[spot]()
+             "car": self.honk,
+             "lamp": self.flip_lamp,
+             "headlights": self.flip_headlights}[spot]()
             return
         if spot.startswith("key"):
             self.push_key(int(spot[3:]))
@@ -570,6 +586,8 @@ class GarageWindow(win95.Window):
             self._toggle_sounds(not self.settings.sounds)
         elif spot in ("knob-right", "screen"):
             self.show_log()
+        elif spot == "badge":
+            self.credits()
 
     def _double_clicked(self, pic, spot):
         if pic == "board":
@@ -634,6 +652,29 @@ class GarageWindow(win95.Window):
         if self.signature is not None and sig != self.signature and not self.busy():
             self.later(1500, self.rescan)
         self.signature = sig
+
+    # -- for fun ---------------------------------------------------------------------
+
+    def flip_lamp(self):
+        self.lamp_on = not self.lamp_on
+        if self.settings.sounds:
+            toon.play("click")
+        self.say("Lights on." if self.lamp_on else "Lights out.",
+                 "" if self.lamp_on else "The darkroom is always this dark.")
+        self.show_state()
+
+    def flip_headlights(self):
+        self.beams = not self.beams
+        if self.settings.sounds:
+            toon.play("click")
+        self.show_state()
+
+    def credits(self):
+        if self.settings.sounds:
+            toon.play("jingle")
+        self.say("DigiCarlo %s." % __version__,
+                 "Built in a garage in 1995, or near enough.",
+                 "Keep your clocks wrong.")
 
     def honk(self):
         if self.settings.sounds:

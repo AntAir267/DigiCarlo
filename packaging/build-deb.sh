@@ -4,7 +4,7 @@ set -e
 
 here=$(cd "$(dirname "$0")" && pwd)
 src=$(dirname "$here")
-version=1.3.0
+version=1.4.0
 revision=1
 pkg="digicarlo_${version}-${revision}_all"
 build="$here/build/$pkg"

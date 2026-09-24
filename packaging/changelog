@@ -1,3 +1,14 @@
+digicarlo (1.4.0-1) unstable; urgency=low
+
+  * The car in the garage is now a 1957 Metropolitan 1500 hardtop, modelled
+    at real size from photographs: the headlights in the blunt ends of the
+    front fenders, the oval egg-crate grille with its M, the stainless
+    spear splitting the two-tone in its Z, the white roof, whitewalls and
+    dog-dish hubcaps. Its chrome reflects the garage, not the sky.
+  * A few things in the garage do something just for fun.
+
+ -- antair <antairdo@gmail.com>  Thu, 24 Sep 2026 12:00:00 +0000
+
 digicarlo (1.3.0-1) unstable; urgency=low
 
   * The window is a garage, pre-rendered in POV-Ray the way a 1995 CD-ROM
