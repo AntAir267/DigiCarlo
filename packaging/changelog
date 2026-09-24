@@ -1,3 +1,41 @@
+digicarlo (1.3.0-1) unstable; urgency=low
+
+  * The window is a garage, pre-rendered in POV-Ray the way a 1995 CD-ROM
+    game was, in a Windows 95 frame. The card in the reader and the camera
+    on the bench pull; the darkroom door and START develop; the calendar
+    shows today and the card's tag how many pictures are new.
+  * The Photo Board: every waiting shot pinned up as a print, sessions led
+    by index cards. The date stamp, the alarm clock, the eraser and the
+    wastebasket on its ledge set dates, keep the camera's, go back to
+    automatic and leave shots out.
+  * ROTATE, NAME and PLACE on the board's radio: a quarter turn (the EXIF
+    orientation for a JPEG, so nothing is recompressed), a title, and GPS
+    coordinates from saved places, all written into the library copy.
+    UNDO takes back one change at a time.
+  * The red-eye pen: the fixes the face finder suggests, checked photo by
+    photo, dropped with a click, or added by clicking a missed eye.
+  * What is decided on the board is kept in board.json until developed.
+  * Pulls from a camera whose clock can be right (trust_clock_cameras: the
+    Polaroid i1237 and Konica KD-400Z) ask which sessions to date by it.
+  * The garage's radio: CHECK CARD reads a card through and looks for read
+    errors in the kernel's log; EJECT unmounts it and powers off the
+    reader; ERASE CARD empties it, only when every file on it is in the
+    archive byte for byte; SYNC asks Syncthing how the library is getting
+    to the phone. Developing asks Syncthing to rescan the library at once.
+  * digicarlo-gui --classic opens the window of 1.1 and 1.2.
+  * fonts-glasstty and fonts-comic-neue are recommended, for the green
+    screen and the handwriting.
+
+ -- antair <antairdo@gmail.com>  Wed, 23 Sep 2026 22:00:00 +0000
+
+digicarlo (1.2.0-1) unstable; urgency=low
+
+  * digicarlo redeye PHOTO... --out DIR takes the flash red out of eyes,
+    into copies. Faces are found by YuNet, run in plain numpy; numpy is
+    recommended.
+
+ -- antair <antairdo@gmail.com>  Wed, 23 Sep 2026 20:00:00 +0000
+
 digicarlo (1.1.0-1) unstable; urgency=low
 
   * The window is now a cartoon car. The shots sit in a landscape seen

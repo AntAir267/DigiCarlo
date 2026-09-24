@@ -163,12 +163,22 @@ class Stage(QWidget):
     often to go into a picture (the green screen)."""
 
     clicked = pyqtSignal(str, str)          # picture, spot
+    double_clicked = pyqtSignal(str, str)
+    context = pyqtSignal(str, str, QPoint)  # picture, spot or "", global position
+    wheeled = pyqtSignal(str, int)          # picture, +1 / -1 a notch
+    hovered = pyqtSignal()
 
     def __init__(self, pictures, parent=None):
         super().__init__(parent)
         self.pictures = pictures
         self.live = lambda pic, spot: True
         self.tip = lambda pic, spot: ""
+        # things drawn by the program rather than rendered (prints on the
+        # board): items(picture, x, y) -> a name, or None
+        self.items = lambda pic, x, y: None
+        # spots that can be clicked but are no thing in particular (the
+        # bare cork): no hand, no glow
+        self.quiet = set()
         self.overlays = []
         self.hot = None
         self.pressed = None
@@ -182,6 +192,13 @@ class Stage(QWidget):
 
     def sizeHint(self):
         return self.canvas
+
+    def set_picture(self, i, picture):
+        """Show another picture in place i (walking from room to room)."""
+        self.pictures[i] = picture
+        self.hot = self.pressed = None
+        self._glows.clear()
+        self.update()
 
     def refresh(self, picture=None):
         for pic in self.pictures:
@@ -234,6 +251,8 @@ class Stage(QWidget):
         if pic is None:
             return None
         spot = pic.spot_at(x, y)
+        if spot is None:
+            spot = self.items(pic.name, x, y)
         if spot is None or not self.live(pic.name, spot):
             return None
         return pic, spot
@@ -248,7 +267,7 @@ class Stage(QWidget):
             pm = pic.scaled(r.size())
             pm.setDevicePixelRatio(dpr)
             p.drawPixmap(QPointF(r.x() / dpr, r.y() / dpr), pm)
-            if self.hot is not None and self.hot[0] is pic:
+            if self.hot is not None and self.hot[0] is pic and self.hot[1] in pic.names:
                 self._paint_glow(p, pic, r, self.hot[1])
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
@@ -283,8 +302,10 @@ class Stage(QWidget):
     def _set_hot(self, hot):
         if hot != self.hot:
             self.hot = hot
-            self.setCursor(Qt.CursorShape.PointingHandCursor if hot
+            self.setCursor(Qt.CursorShape.PointingHandCursor
+                           if hot and hot[1] not in self.quiet
                            else Qt.CursorShape.ArrowCursor)
+            self.hovered.emit()
             self.update()
 
     def mouseMoveEvent(self, e):
@@ -306,6 +327,24 @@ class Stage(QWidget):
         if was is not None and now == was:
             QToolTip.hideText()
             self.clicked.emit(was[0].name, was[1])
+
+    def mouseDoubleClickEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton:
+            hit = self.spot_under(e.position())
+            if hit is not None:
+                self.double_clicked.emit(hit[0].name, hit[1])
+
+    def contextMenuEvent(self, e):
+        pic, _, _ = self.to_picture(QPointF(e.pos()))
+        hit = self.spot_under(QPointF(e.pos()))
+        if pic is not None:
+            self.context.emit(pic.name, hit[1] if hit else "", e.globalPos())
+
+    def wheelEvent(self, e):
+        pic, _, _ = self.to_picture(e.position())
+        steps = e.angleDelta().y() // 120
+        if pic is not None and steps:
+            self.wheeled.emit(pic.name, -1 if steps > 0 else 1)
 
     def event(self, e):
         if e.type() == e.Type.ToolTip:
