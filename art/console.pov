@@ -15,7 +15,7 @@
 
 // Clickable things, numbered for Hide: keys 1-5, then these.
 #declare HotKnobL = 6; #declare HotKnobR = 7; #declare HotStart = 8;
-#declare HotScreen = 9; #declare HotCounter = 10;
+#declare HotScreen = 9; #declare HotCounter = 10; #declare HotBadge = 11;
 #macro Hot(N) #if (Hide = N) no_image #end #end
 
 global_settings {
@@ -161,7 +161,8 @@ box { <RC - 190, 17, -21.5>, <RC + 190, 83, -21>
 // the name in chrome script, as the car wears it
 #declare Nm = text { ttf FontScript "DigiCarlo" 0.3, 0 }
 #declare NMn = min_extent(Nm); #declare NMx = max_extent(Nm);
-object { Nm translate -<(NMn.x + NMx.x)/2, (NMn.y + NMx.y)/2, 0> scale 24 translate <RC, -76, -19> texture { T_Chrome } }
+object { Nm translate -<(NMn.x + NMx.x)/2, (NMn.y + NMx.y)/2, 0> scale 24 translate <RC, -76, -19> texture { T_Chrome }
+         Hot(HotBadge) }
 
 // ---------------------------------------------------------------------------
 // the counter and the starter

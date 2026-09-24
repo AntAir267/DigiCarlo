@@ -59,6 +59,14 @@ for i in range(7):
     d.rectangle([22 + i * 28, 10, 38 + i * 28, 60], fill=(255, 205, 60))
 im.save("tex/sdcard.png")
 
+# the Metropolitan's licence plate
+im = Image.new("RGB", (300, 150), (246, 214, 70))
+d = ImageDraw.Draw(im)
+d.rectangle([4, 4, 295, 145], outline=(40, 30, 20), width=5)
+d.text((150, 30), "1 9 5 7", font=font("nunito", 22), fill=(40, 30, 20), anchor="mm")
+d.text((150, 88), "DIGI 57", font=font("nunito", 70), fill=(40, 30, 20), anchor="mm")
+im.save("tex/plate.png")
+
 # crate label
 im = Image.new("RGB", (480, 110), (250, 250, 246))
 d = ImageDraw.Draw(im)

@@ -2,7 +2,7 @@
 # Render every picture the window uses, at twice its logical size, and turn
 # them into the program's assets in ../digicarlo/scenes/ (see assets.py).
 #
-#     art/render.sh           full quality: about half an hour on 24 threads
+#     art/render.sh           full quality: about an hour on 24 threads
 #     art/render.sh quick     no bounced light or soft shadows, for checking layout
 #     art/render.sh check     full quality, plus out/check-*.png showing the
 #                             hotspots and the surfaces the program paints on
@@ -72,14 +72,25 @@ outlines() {
 S="2544 1080"       # a scene
 C="2544 460"        # the console
 
-# the garage: empty, then with each thing that comes and goes
+# the garage: empty, then with each thing that comes and goes; then the
+# same in the dark, with the light over the car switched off; and the car's
+# headlights, in the light and in the dark
 rad=$(radpass garage.pov garage $S Declare=Card=1 Declare=Blink=1 Declare=Safe=0)
 use=$(reuse $rad)
 pov garage.pov garage.png           $S $full $use Declare=Card=0 Declare=Blink=0 Declare=Safe=0
 pov garage.pov garage-card.png      $S $full $use Declare=Card=1 Declare=Blink=0 Declare=Safe=0
 pov garage.pov garage-blink.png     $S $full $use Declare=Card=0 Declare=Blink=1 Declare=Safe=0
 pov garage.pov garage-safelight.png $S $full $use Declare=Card=0 Declare=Blink=0 Declare=Safe=1
-outlines garage.pov garage $S 6
+pov garage.pov garage-beams.png     $S $full $use Declare=Card=0 Declare=Blink=0 Declare=Safe=0 Declare=Beams=1
+rad=$(radpass garage.pov garage-dark $S Declare=Lamp=0 Declare=Card=1 Declare=Blink=1 Declare=Safe=0)
+use=$(reuse $rad)
+dark="Declare=Lamp=0"
+pov garage.pov garage-dark.png           $S $full $use $dark Declare=Card=0 Declare=Blink=0 Declare=Safe=0
+pov garage.pov garage-dark-card.png      $S $full $use $dark Declare=Card=1 Declare=Blink=0 Declare=Safe=0
+pov garage.pov garage-dark-blink.png     $S $full $use $dark Declare=Card=0 Declare=Blink=1 Declare=Safe=0
+pov garage.pov garage-dark-safelight.png $S $full $use $dark Declare=Card=0 Declare=Blink=0 Declare=Safe=1
+pov garage.pov garage-dark-beams.png     $S $full $use $dark Declare=Card=0 Declare=Blink=0 Declare=Safe=0 Declare=Beams=1
+outlines garage.pov garage $S 8
 
 # the Photo Board, and its wastebasket with left-out prints in it
 rad=$(radpass board.pov board $S Declare=Trash=1)
@@ -105,7 +116,7 @@ pov console.pov console-board.png $C $full $use Declare=Mode=1
 for k in 1 2 3 4 5; do
     pov console.pov console-board-key$k.png $C $full $use Declare=Mode=1 Declare=Lit=$k
 done
-outlines console.pov console $C 10 Declare=Mode=0
+outlines console.pov console $C 11 Declare=Mode=0
 
 # the map pins, and the alarm clock for the trust-the-camera's-clock dialog
 for c in 1 2 3 4 5; do

@@ -11,11 +11,14 @@
 #ifndef (Card) #declare Card = 1; #end        // a card in the reader
 #ifndef (Blink) #declare Blink = 1; #end      // the SiPix on the bench
 #ifndef (Safe) #declare Safe = 1; #end        // the darkroom's safelight on
+#ifndef (Lamp) #declare Lamp = 1; #end        // the light over the car on (0: the garage in the dark)
+#ifndef (Beams) #declare Beams = 0; #end      // the car's headlights on
 #ifndef (Hide) #declare Hide = 0; #end        // leave out one clickable thing, to find its outline
 
 // Clickable things, numbered for Hide; the program's hotspots follow these.
 #declare HotCard = 1; #declare HotBlink = 2; #declare HotDoor = 3;
 #declare HotBoard = 4; #declare HotCrate = 5; #declare HotCar = 6;
+#declare HotLamp = 7; #declare HotLights = 8;
 #macro Hot(N) #if (Hide = N) no_image #end #end
 
 global_settings {
@@ -95,13 +98,16 @@ camera {
 // Lights: the pendant lamp, daylight through the window, the safelight
 // ---------------------------------------------------------------------------
 
+#if (Lamp)
 light_source {
   <25, 212, 250> srgb <1.0, 0.86, 0.66>*1.25
   #if (Area) area_light <26, 0, 0>, <0, 0, 26>, 7, 7 adaptive 1 circular orient #end
   fade_distance 200 fade_power 1.4
 }
-light_source { <-30, 170, -140> srgb <0.9, 0.93, 1.0>*0.42 shadowless }
 light_source { <220, 230, 120> srgb <1.0, 0.9, 0.75>*0.55 fade_distance 220 fade_power 1.2 }
+#end
+// fill from the open side of the room; dimmer with the light off
+light_source { <-30, 170, -140> srgb <0.9, 0.93, 1.0>*(Lamp ? 0.42 : 0.12) shadowless }
 light_source {
   <-900, 900, 1500> srgb <1.0, 0.95, 0.85>*1.6 parallel point_at <-190, 0, 330>
 }
@@ -117,20 +123,26 @@ sky_sphere {
   }
 }
 
-// outside: lawn, a hedge and a tree
-plane { y, -0.5 texture { pigment { srgb <0.36, 0.66, 0.26> } finish { ambient 0 diffuse 0.8 } } }
-union {
-  #for (I, 0, 30)
-    sphere { <-900 + I*55, 45 + rand(S)*20, 1100 + rand(S)*60>, 70 + rand(S)*20 }
-  #end
-  texture { pigment { granite scale 30 color_map { [0 srgb <0.20, 0.45, 0.18>] [1 srgb <0.30, 0.58, 0.24>] } } finish { ambient 0 diffuse 0.8 } }
-}
-union {
-  cylinder { <-80, 0, 800>, <-80, 260, 800>, 16 texture { pigment { srgb <0.40, 0.25, 0.14> } } }
-  #for (I, 0, 9)
-    sphere { <-80 + (rand(S)-0.5)*220, 300 + rand(S)*140, 800 + (rand(S)-0.5)*80>, 80 + rand(S)*40
-             texture { pigment { granite scale 40 color_map { [0 srgb <0.18, 0.45, 0.16>] [1 srgb <0.32, 0.62, 0.22>] } } finish { ambient 0 diffuse 0.8 } } }
-  #end
+// outside: lawn, a hedge and a tree, lit by the sun alone (so the car's
+// headlights, shining at the window, do not light the hills)
+light_group {
+  plane { y, -0.5 texture { pigment { srgb <0.36, 0.66, 0.26> } finish { ambient 0 diffuse 0.8 } } }
+  union {
+    #for (I, 0, 30)
+      sphere { <-900 + I*55, 45 + rand(S)*20, 1100 + rand(S)*60>, 70 + rand(S)*20 }
+    #end
+    texture { pigment { granite scale 30 color_map { [0 srgb <0.20, 0.45, 0.18>] [1 srgb <0.30, 0.58, 0.24>] } } finish { ambient 0 diffuse 0.8 } }
+  }
+  union {
+    cylinder { <-80, 0, 800>, <-80, 260, 800>, 16 texture { pigment { srgb <0.40, 0.25, 0.14> } } }
+    #for (I, 0, 9)
+      sphere { <-80 + (rand(S)-0.5)*220, 300 + rand(S)*140, 800 + (rand(S)-0.5)*80>, 80 + rand(S)*40
+               texture { pigment { granite scale 40 color_map { [0 srgb <0.18, 0.45, 0.16>] [1 srgb <0.32, 0.62, 0.22>] } } finish { ambient 0 diffuse 0.8 } } }
+    #end
+  }
+
+  light_source { <-900, 900, 1500> srgb <1.0, 0.95, 0.85>*1.6 parallel point_at <-190, 0, 330> }
+  global_lights off
 }
 
 // ---------------------------------------------------------------------------
@@ -169,6 +181,15 @@ box { <-350, 262, -300>, <500, 280, 410> T_Plank(S, <0.45, 0.28, 0.15>, y*90) }
 #end
 // baseboard
 box { <-340, 0, 394>, <480, 11, 400> T_Plank(S, <0.45, 0.27, 0.14>, y*90) }
+// the wall behind the camera: never seen, but the chrome reflects it
+union {
+  #for (I, 0, 52)
+    #local X0 = -350 + I*16;
+    box { <X0 + 0.35, 0, -266>, <X0 + 15.65, 262, -262>
+          T_Plank(S, <0.80, 0.53, 0.31>*(0.90 + 0.14*rand(S)), x*90) }
+  #end
+  box { <-350, 0, -272>, <500, 270, -266> pigment { srgb <0.20, 0.11, 0.05> } }
+}
 
 // concrete floor, with a joint and an oil stain
 box {
@@ -196,7 +217,11 @@ union {
   box { <-298, 98, 386>, <-105, 104, 401> }         // sill
   T_Plank(S, <0.88, 0.66, 0.43>, y*90)
 }
-box { <-285, 112, 398.5>, <-118, 232, 399> texture { pigment { srgbf <0.9, 0.95, 1.0, 0.92> } finish { ambient 0 diffuse 0 specular 0.8 roughness 0.001 reflection 0.06 } } }
+light_group {
+  box { <-285, 112, 398.5>, <-118, 232, 399> texture { pigment { srgbf <0.9, 0.95, 1.0, 0.92> } finish { ambient 0 diffuse 0 specular 0.8 roughness 0.001 reflection 0.025 } } }
+  light_source { <-900, 900, 1500> srgb <1.0, 0.95, 0.85>*1.6 parallel point_at <-190, 0, 330> }
+  global_lights off
+}
 
 // ---------------------------------------------------------------------------
 // The Pick-Up Bench
@@ -377,42 +402,16 @@ sphere { <253, 211, 399>, 1.2 texture { T_Chrome } }
 // The Metropolitan, nosing in
 // ---------------------------------------------------------------------------
 
-#declare Car = union {
-  // body: low and round, Caribbean Blue below the chrome spear
-  superellipsoid { <0.45, 0.45> scale <150, 28, 64> translate <150, 50, 0> texture { T_Carib } }
-  // fat front fenders carrying the headlights
-  #for (Sd, -1, 1, 2)
-    superellipsoid { <0.65, 0.65> scale <46, 30, 25> translate <34, 66, Sd*43> texture { T_Carib } }
-    torus { 11, 2.8 rotate z*90 translate <-10.5, 76, Sd*43> texture { T_Chrome } }
-    sphere { 0, 10.5 scale <0.45, 1, 1> translate <-9.5, 76, Sd*43>
-             texture { pigment { srgb <1, 0.98, 0.88> } finish { ambient 0 emission 0.45 diffuse 0.5 specular 0.9 roughness 0.001 reflection 0.25 } } }
-  #end
-  // Snowberry hood, sloping down to the nose
-  superellipsoid { <0.4, 0.35> scale <86, 10, 48> rotate z*5 translate <108, 82, 0> texture { T_Snow } }
-  // chrome spear
-  box { <10, 64, -65>, <300, 66, 65> texture { T_Chrome } }
-  // cabin and windshield
-  superellipsoid { <0.5, 0.35> scale <62, 30, 58> translate <244, 110, 0> texture { T_Snow } }
-  box { <-1.5, -26, -50>, <1.5, 26, 50> rotate z*-40 translate <186, 110, 0>
-        texture { pigment { srgbf <0.50, 0.72, 0.84, 0.5> } finish { ambient 0 specular 0.9 roughness 0.001 reflection 0.3 } } }
-  // the grille: a wide chrome mouth
-  torus { 12, 2.6 scale <1, 1, 2.4> rotate z*90 translate <-6, 50, 0> texture { T_Chrome } }
-  #for (I, -3, 3)
-    cylinder { <-5, 40.5, I*6.8>, <-5, 59.5, I*6.8>, 1.4 texture { T_Chrome } }
-  #end
-  box { <-3, 39, -27>, <4, 61, 27> pigment { srgb 0.04 } }
-  // bumper
-  superellipsoid { <0.4, 0.4> scale <6, 5.5, 60> translate <-12, 30, 0> texture { T_Chrome } }
-  // front wheels, whitewalls
-  #for (Sd, -1, 1, 2)
-    torus { 21, 10 rotate x*90 translate <58, 31, Sd*58> texture { T_Rubber } }
-    cylinder { <58, 31, Sd*64>, <58, 31, Sd*69.5>, 19 texture { T_White } }
-    cylinder { <58, 31, Sd*66>, <58, 31, Sd*71.5>, 11 texture { T_Chrome } }
-  #end
-}
-object { Car scale 0.92 rotate y*-28 translate <128, 0, 150> Hot(HotCar) }
+#include "metropolitan.inc"
+object { Metropolitan scale 0.95 rotate y*-28 translate <150, 0, 240> Hot(HotCar) }
 
-// the pendant lamp
-cylinder { <25, 262, 250>, <25, 228, 250>, 0.5 texture { pigment { srgb 0.1 } } }
-cone { <25, 228, 250>, 3, <25, 214, 250>, 16 open texture { pigment { srgb <0.85, 0.20, 0.16> } finish { ambient 0 diffuse 0.7 specular 0.5 roughness 0.01 } } }
-sphere { <25, 215, 250>, 4.5 texture { pigment { srgb <1, 0.95, 0.8> } finish { ambient 0 emission 1 } } no_shadow }
+// the pendant lamp, which can be switched off
+union {
+  cylinder { <25, 262, 250>, <25, 228, 250>, 0.5 texture { pigment { srgb 0.1 } } }
+  cone { <25, 228, 250>, 3, <25, 214, 250>, 16 open texture { pigment { srgb <0.85, 0.20, 0.16> } finish { ambient 0 diffuse 0.7 specular 0.5 roughness 0.01 } } }
+  sphere { <25, 215, 250>, 4.5
+           texture { #if (Lamp) pigment { srgb <1, 0.95, 0.8> } finish { ambient 0 emission 1 }
+                     #else pigment { srgbf <0.9, 0.9, 0.85, 0.4> } finish { ambient 0 emission 0.03 diffuse 0.3 specular 0.9 roughness 0.002 reflection 0.1 } #end }
+           no_shadow }
+  Hot(HotLamp)
+}

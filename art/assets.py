@@ -61,6 +61,14 @@ def piece(variant, base, where, soft=8):
     return Image.fromarray(rgba, "RGBA"), (x0, y0)
 
 
+def piece_changed(variant, base, threshold=10, around=28, soft=12):
+    """What `variant` changes anywhere (light thrown across a room), without
+    the odd pixel the reused bounced light still moves."""
+    m = mask_image(np.abs(variant - base).max(axis=2) > threshold)
+    m = m.filter(ImageFilter.MinFilter(5)).filter(ImageFilter.MaxFilter(5))
+    return piece(variant, base, grow(m, around), soft)
+
+
 def disc(size, centre, radius):
     m = Image.new("L", size, 0)
     ImageDraw.Draw(m).ellipse([centre[0] - radius, centre[1] - radius,
@@ -115,6 +123,13 @@ class Scene:
         img = Image.open(os.path.join(OUT, render)).convert("RGB")
         img.save(os.path.join(DEST, "%s.jpg" % self.name), quality=95, subsampling=0)
         self.info["background"] = "%s.jpg" % self.name
+
+    def add_whole(self, key, render):
+        """A piece that is the whole picture (the garage in the dark)."""
+        fn = "%s-%s.jpg" % (self.name, key)
+        Image.open(os.path.join(OUT, render)).convert("RGB").save(
+            os.path.join(DEST, fn), quality=95, subsampling=0)
+        self.info["pieces"][key] = {"file": fn, "at": [0, 0]}
 
     def add_piece(self, key, img, at):
         fn = "%s-%s.png" % (self.name, key)
@@ -174,7 +189,9 @@ W, H = 2544, 1080
 g = Scene("garage", (W, H))
 g.background("garage.png")
 base = load("garage.png")
-gmap = g.hotspots([(1, "card"), (2, "blink"), (3, "door"), (4, "board"), (5, "crate"), (6, "car")],
+# the headlights before the car, so they win where the two overlap
+gmap = g.hotspots([(1, "card"), (2, "blink"), (3, "door"), (4, "board"), (5, "crate"),
+                   (8, "headlights"), (7, "lamp"), (6, "car")],
                   "garage-q.png", "garage-q-hide%d.png")
 cam = Camera((-10, 138, -150), (0, 118, 400), W, H, angle=72)
 # the card and camera with their shadows (and the reader's light), and the
@@ -183,8 +200,17 @@ reader = disc((W, H), cam.project((-231, 100, 342.3)), 24)
 g.add_piece("card", *piece(load("garage-card.png"), base,
                            grow(union(g.outlines["card"], reader), 40)))
 g.add_piece("blink", *piece(load("garage-blink.png"), base, grow(g.outlines["blink"], 40)))
-g.add_piece("safelight", *piece(load("garage-safelight.png"), base,
-                                disc((W, H), cam.project((-27, 219, 392)), 230)))
+safe = disc((W, H), cam.project((-27, 219, 392)), 230)
+g.add_piece("safelight", *piece(load("garage-safelight.png"), base, safe))
+g.add_piece("beams", *piece_changed(load("garage-beams.png"), base))
+# the same, with the light switched off
+g.add_whole("dark", "garage-dark.png")
+dark = load("garage-dark.png")
+g.add_piece("dark-card", *piece(load("garage-dark-card.png"), dark,
+                                grow(union(g.outlines["card"], reader), 40)))
+g.add_piece("dark-blink", *piece(load("garage-dark-blink.png"), dark, grow(g.outlines["blink"], 40)))
+g.add_piece("dark-safelight", *piece(load("garage-dark-safelight.png"), dark, safe))
+g.add_piece("dark-beams", *piece_changed(load("garage-dark-beams.png"), dark))
 g.surface("card", face(cam, 13, 18, -0.9, [("rotate", (-8, 0, 0)), ("translate", (-252, 99, 352))]), (240, 320))
 g.surface("tag", face(cam, 26, 11.5, -0.2, [("rotate", (0, 0, 8)), ("rotate", (0, -12, 0)),
                                               ("translate", (-214, 88, 343))]), (360, 160))
@@ -222,7 +248,8 @@ c = Scene("console", (W, H))
 c.background("console.png")
 base = load("console.png")
 cmap = c.hotspots([(1, "key1"), (2, "key2"), (3, "key3"), (4, "key4"), (5, "key5"),
-                   (6, "knob-left"), (7, "knob-right"), (8, "start"), (9, "screen"), (10, "counter")],
+                   (6, "knob-left"), (7, "knob-right"), (8, "start"), (9, "screen"), (10, "counter"),
+                   (11, "badge")],
                   "console-q.png", "console-q-hide%d.png")
 cam = Camera((0, 150, -800), (0, 0, 0), W, H, ortho=(1272, 230))
 # a key pushed in lights its station on the dial and swings the needle there;
