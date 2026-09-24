@@ -22,7 +22,7 @@ of shots can be given a date of its own instead.
 
 ```bash
 ./packaging/build-deb.sh
-sudo apt install ./packaging/digicarlo_1.3.0-1_all.deb
+sudo apt install ./packaging/digicarlo_1.4.0-1_all.deb
 ```
 
 That brings in what it needs — `exiftool` to write dates, `ffmpeg` to remux
@@ -186,6 +186,9 @@ thing:
 | The crate of originals | Opens the archive folder |
 | The car | Honks, and looks for cameras again |
 | The calendar | Today: the date a pull's newest shot gets |
+
+The car is a 1957 Metropolitan 1500 hardtop, modelled from photographs. A
+few other things in the garage can be clicked too, just for fun.
 
 ### The Photo Board
 

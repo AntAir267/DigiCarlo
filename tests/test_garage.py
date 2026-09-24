@@ -347,6 +347,37 @@ class GarageWindowTests(unittest.TestCase):
         self.assertIn("CHECKED 3 FILES", " ".join(self.win.screen_lines()))
         self.assertIn("ALL READ CLEANLY", " ".join(self.win.screen_lines()))
 
+    def test_the_light_switches_off(self):
+        self.plug_in()
+        hit = self.win.stage.spot_under(self.point_of(self.win.garage_pic, "lamp"))
+        self.assertEqual(hit[1], "lamp")
+        self.win._clicked("garage", "lamp")
+        on = self.win.garage_pic.on
+        self.assertEqual(on[0], "dark")
+        self.assertIn("dark-card", on)
+        self.assertIn("dark-safelight", on)
+        self.assertIn("LIGHTS OUT", " ".join(self.win.screen_lines()))
+        self.win._clicked("garage", "lamp")
+        self.assertNotIn("dark", self.win.garage_pic.on)
+        self.assertIn("card", self.win.garage_pic.on)
+
+    def test_the_headlights_and_the_horn(self):
+        hit = self.win.stage.spot_under(self.point_of(self.win.garage_pic, "headlights"))
+        self.assertEqual(hit[1], "headlights")
+        hit = self.win.stage.spot_under(self.point_of(self.win.garage_pic, "car"))
+        self.assertEqual(hit[1], "car")
+        self.win._clicked("garage", "headlights")
+        self.assertIn("beams", self.win.garage_pic.on)
+        self.win._clicked("garage", "lamp")
+        self.assertIn("dark-beams", self.win.garage_pic.on)
+        self.assertFalse(self.win.garage_pic.composed().isNull())
+
+    def test_the_badge_knows_who_it_is(self):
+        hit = self.win.stage.spot_under(self.point_of(self.win.console, "badge"))
+        self.assertEqual(hit[1], "badge")
+        self.win._clicked("console", "badge")
+        self.assertIn("DIGICARLO", " ".join(self.win.screen_lines()))
+
     def test_screen_wraps_to_its_width(self):
         lines = self.garage.screen("Kodak card in the reader: 32 new.", "118 shots waiting.")
         self.assertTrue(all(len(line) <= self.garage.SCREEN_COLUMNS for line in lines))
