@@ -25,6 +25,48 @@
      936,
      0
     ]
+   },
+   "beams": {
+    "file": "garage-beams.png",
+    "at": [
+     443,
+     657
+    ]
+   },
+   "dark": {
+    "file": "garage-dark.jpg",
+    "at": [
+     0,
+     0
+    ]
+   },
+   "dark-card": {
+    "file": "garage-dark-card.png",
+    "at": [
+     325,
+     492
+    ]
+   },
+   "dark-blink": {
+    "file": "garage-dark-blink.png",
+    "at": [
+     603,
+     511
+    ]
+   },
+   "dark-safelight": {
+    "file": "garage-dark-safelight.png",
+    "at": [
+     936,
+     0
+    ]
+   },
+   "dark-beams": {
+    "file": "garage-dark-beams.png",
+    "at": [
+     430,
+     166
+    ]
    }
   },
   "hotspots": {
@@ -64,16 +106,32 @@
     "name": "crate",
     "glow": "garage-glow-crate.png",
     "at": [
-     203,
+     202,
      786
+    ]
+   },
+   "8": {
+    "name": "headlights",
+    "glow": "garage-glow-headlights.png",
+    "at": [
+     1711,
+     668
+    ]
+   },
+   "7": {
+    "name": "lamp",
+    "glow": "garage-glow-lamp.png",
+    "at": [
+     1293,
+     0
     ]
    },
    "6": {
     "name": "car",
     "glow": "garage-glow-car.png",
     "at": [
-     1712,
-     481
+     1699,
+     466
     ]
    }
   },
@@ -752,6 +810,14 @@
     "at": [
      1828,
      135
+    ]
+   },
+   "11": {
+    "name": "badge",
+    "glow": "console-glow-badge.png",
+    "at": [
+     1214,
+     332
     ]
    }
   },

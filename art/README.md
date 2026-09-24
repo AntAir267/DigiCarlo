@@ -8,7 +8,7 @@ date on the calendar and the date stamp, the card's name and how many pictures
 on it are new, and the shots pinned to the board.
 
 ```bash
-art/render.sh          # everything, full quality: about half an hour on 24 threads
+art/render.sh          # everything, full quality: about an hour on 24 threads
 art/render.sh quick    # no bounced light or soft shadows, for checking layout
 art/render.sh check    # full quality, plus out/check-*.png to look over
 ```
@@ -22,7 +22,9 @@ goes to `../digicarlo/scenes/`, which is.
 The program swaps things in and out of the pictures -- a card in the reader,
 the SiPix on the bench, the safelight on, prints in the wastebasket, a radio
 key pushed in, the board's stations on the dial, START lit, each digit of the
-counter. Each is a full render of the scene in that state,
+counter; and, for fun, the car's headlights, and the whole garage with its
+light switched off (a second set of the same pieces, lit only by the window,
+the desk lamp and the safelight). Each is a full render of the scene in that state,
 and `assets.py` keeps only what differs from the background, feathered at the
 edge. For that to leave no seam, every render of a scene has to light it
 exactly alike, so:
@@ -44,7 +46,9 @@ their corners through the scene's own camera.
 
 | File | What it is |
 | --- | --- |
-| `garage.pov` | The garage: Pick-Up Bench, darkroom door, Photo Board, the Metropolitan. `Card`, `Blink`, `Safe` switch the card, the SiPix and the safelight |
+| `garage.pov` | The garage: Pick-Up Bench, darkroom door, Photo Board, the Metropolitan. `Card`, `Blink`, `Safe` switch the card, the SiPix and the safelight; `Lamp` the light over the car, `Beams` the headlights |
+| `metropolitan.inc` | A 1956-58 Nash Metropolitan 1500 hardtop at real size, after photographs: its body a distance field of rounded shapes blended together, the two-tone split by the stainless spear's Z |
+| `car_test.pov` | The car on its own, from the front, side or front quarter (`View`), for checking it against photographs |
 | `board.pov` | Walking up to the Photo Board, empty. On its ledge: the date stamp, the alarm clock (the camera's date), the eraser (automatic), the wastebasket (`Trash` fills it), the red-eye pen, and the sign back to the garage |
 | `console.pov` | The console. `Mode` 0 is the garage's, 1 the board's; `Lit` is the radio key pushed in, `Go` START's lamp (2 for STOP), `Digit` what the counter shows |
 | `clockicon.pov` | The alarm clock for the trust-the-camera's-clock dialog |
