@@ -474,6 +474,20 @@ def red_mask(patch):
     return _dilate(_fill_holes(lab == best), 2)
 
 
+def fix_patch(rgb, x, y, size):
+    """Take the flash red out of the pupil in the square (x, y, size) of an
+    RGB array, in place. Says whether there was a red pupil there."""
+    patch = rgb[y:y + size, x:x + size]
+    mask = red_mask(patch)
+    if mask is None:
+        return False
+    p = patch.astype(np.float32)
+    dark = (p[:, :, 1] + p[:, :, 2]) / 2 * 0.8      # a pupil is dark, and neutral
+    m = _blur5(mask.astype(np.float32))[:, :, None]
+    patch[:] = (p * (1 - m) + dark[:, :, None] * m).astype(np.uint8)
+    return True
+
+
 def remove_red_eye(image, faces=None, max_side=1400):
     """(corrected Pillow image, [(x, y, w, h) of each eye fixed], faces)."""
     from PIL import Image
@@ -489,13 +503,32 @@ def remove_red_eye(image, faces=None, max_side=1400):
             x, y = int(cx - rad), int(cy - rad)
             if x < 0 or y < 0 or x + 2 * rad > rgb.shape[1] or y + 2 * rad > rgb.shape[0]:
                 continue
-            patch = rgb[y:y + 2 * rad, x:x + 2 * rad]
-            mask = red_mask(patch)
-            if mask is None:
-                continue
-            p = patch.astype(np.float32)
-            dark = (p[:, :, 1] + p[:, :, 2]) / 2 * 0.8      # a pupil is dark, and neutral
-            m = _blur5(mask.astype(np.float32))[:, :, None]
-            patch[:] = (p * (1 - m) + dark[:, :, None] * m).astype(np.uint8)
-            fixed.append((x, y, 2 * rad, 2 * rad))
+            if fix_patch(rgb, x, y, 2 * rad):
+                fixed.append((x, y, 2 * rad, 2 * rad))
     return Image.fromarray(rgb), fixed, faces
+
+
+def box_at(size, x, y):
+    """Where to look for a pupil someone pointed at, at (x, y) in a picture
+    of `size` (w, h): a square round it, big enough for an eye at the sizes
+    these cameras take pictures, kept inside the picture."""
+    w, h = size
+    side = max(24, int(max(w, h) * 0.045)) // 2 * 2
+    side = min(side, w, h)
+    bx = min(max(0, int(x) - side // 2), w - side)
+    by = min(max(0, int(y) - side // 2), h - side)
+    return (bx, by, side, side)
+
+
+def apply_fixes(image, boxes):
+    """Fix the red pupil in each (x, y, w, h): the ones remove_red_eye found
+    that were kept, and any pointed out by hand. Returns the corrected image
+    and the boxes that did hold a red pupil."""
+    from PIL import Image
+    rgb = np.array(image.convert("RGB"))
+    done = []
+    for x, y, w, h in boxes:
+        side = min(w, h)
+        if fix_patch(rgb, int(x), int(y), int(side)):
+            done.append((x, y, w, h))
+    return Image.fromarray(rgb), done
