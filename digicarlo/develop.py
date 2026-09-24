@@ -16,6 +16,12 @@ Everything starts from the archive copy, which is never touched. For each shot:
 
 Every file's modification time is set to its new date too, since that is
 what some phone galleries fall back on.
+
+What was decided on the Photo Board goes into the library copy as well (see
+edits.py): a quarter-turn is the EXIF orientation tag for a JPEG, so its
+pixels are not recompressed, or the QuickTime rotation for a clip; a title
+goes in as the title and description, a place as GPS coordinates; red-eye
+fixes are made in the pixels, and so re-save that one photo at quality 95.
 """
 
 import datetime
@@ -122,6 +128,81 @@ def still_date_args(when, make=None, model=None):
     if model:
         args.append("-Model=" + model)
     return args
+
+
+# EXIF orientations that are pure turns, and how many quarter turns
+# clockwise each is.
+TURNS = {1: 0, 6: 1, 3: 2, 8: 3}
+
+
+def orientation_of(path):
+    try:
+        from PIL import Image
+        with Image.open(path) as im:
+            return int(im.getexif().get(0x0112) or 1)
+    except Exception:
+        return 1
+
+
+def edit_args(edit, path=None, video=False, tag_turn=True):
+    """exiftool arguments for what the Photo Board decided about a shot."""
+    args = []
+    if edit is None:
+        return args
+    if edit.rotate and tag_turn:
+        if video:
+            args.append("-Rotation=%d" % (90 * edit.rotate))
+        else:
+            now = orientation_of(path) if path else 1
+            if now in TURNS:
+                turns = (TURNS[now] + edit.rotate) % 4
+                args.append("-Orientation#=%d" % {v: k for k, v in TURNS.items()}[turns])
+    if edit.title:
+        t = edit.title
+        args += ["-XMP-dc:Title=" + t, "-XMP-dc:Description=" + t]
+        args += ["-QuickTime:Title=" + t, "-QuickTime:Description=" + t] if video \
+            else ["-EXIF:ImageDescription=" + t]
+    if edit.place:
+        _, lat, lon = edit.place
+        if video:
+            coords = "%.6f, %.6f" % (lat, lon)
+            args += ["-Keys:GPSCoordinates=" + coords, "-UserData:GPSCoordinates=" + coords]
+        else:
+            args += ["-GPSLatitude=%.6f" % abs(lat), "-GPSLatitudeRef=%s" % ("N" if lat >= 0 else "S"),
+                     "-GPSLongitude=%.6f" % abs(lon), "-GPSLongitudeRef=%s" % ("E" if lon >= 0 else "W")]
+    return args
+
+
+def fix_red_eye(src, dst, boxes, log=None):
+    """Write src to dst with the red taken out of the pupils in boxes, its
+    EXIF kept. Without numpy, the photo goes over as it is."""
+    from PIL import Image
+    try:
+        from . import redeye
+    except ImportError:
+        if log:
+            log.warn("%s: red-eye fixes need numpy; copied as it is"
+                     % os.path.basename(src))
+        shutil.copyfile(src, dst)
+        return
+    with Image.open(src) as im:
+        exif, icc = im.info.get("exif"), im.info.get("icc_profile")
+        fixed, done = redeye.apply_fixes(im, boxes)
+    extra = {"exif": exif} if exif else {}
+    if icc:
+        extra["icc_profile"] = icc
+    fixed.save(dst, "JPEG", quality=95, **extra)
+    if log:
+        log.info("  %s: took the red out of %d eye(s)" % (os.path.basename(src), len(done)))
+
+
+def turn_pixels(path, quarters):
+    """Turn a picture that has no orientation tag to hold it, losslessly
+    for PNG and the like."""
+    from PIL import Image
+    with Image.open(path) as im:
+        turned = im.rotate(-90 * quarters, expand=True)
+        turned.save(path)
 
 
 def video_date_args(when):
@@ -267,8 +348,10 @@ class Developer:
         self.exif = None
         self.sipix_counter = None
 
-    def develop(self, plan, progress=None, cancel=None):
+    def develop(self, plan, progress=None, cancel=None, edits=None):
+        """edits: {sha: edits.Edit}, what the Photo Board decided."""
         result = Result()
+        self.edits = edits or {}
         shots = [s for s in plan.shots if s.key in self.arc.files
                  and s.key not in self.arc.developed]
         if not shots:
@@ -293,7 +376,8 @@ class Developer:
                 rule = plan.rules.get(shot.key)
                 tmpdir = tempfile.mkdtemp(dir=work)
                 try:
-                    outputs, why = self._one(rec, when, tmpdir, plan)
+                    outputs, why = self._one(rec, when, tmpdir, plan,
+                                             self.edits.get(shot.key))
                 except (DevelopError, blinky.CameraError, OSError) as exc:
                     self.log.error("%s: %s" % (name, exc))
                     result.failed.append((name, str(exc)))
@@ -320,7 +404,7 @@ class Developer:
 
     # -- per kind --------------------------------------------------------------
 
-    def _one(self, rec, when, tmp, plan):
+    def _one(self, rec, when, tmp, plan, edit=None):
         src = self.arc.abspath(rec["path"])
         kind = rec.get("kind")
         name = os.path.basename(src)
@@ -329,9 +413,19 @@ class Developer:
             return [], "raw kept in the archive only; its JPEG goes to the library"
         if kind in ("still", "raw"):
             work = os.path.join(tmp, name)
-            shutil.copyfile(src, work)
+            if edit is not None and edit.redeye and ext in (".jpg", ".jpeg", ".jpe"):
+                fix_red_eye(src, work, edit.redeye, self.log)
+            else:
+                shutil.copyfile(src, work)
+            # JPEG, TIFF and raws carry an orientation tag; turn anything
+            # else's pixels instead, which for PNG and the like is lossless.
+            in_pixels = bool(edit is not None and edit.rotate and kind == "still"
+                             and ext not in (".jpg", ".jpeg", ".jpe", ".tif", ".tiff"))
+            if in_pixels:
+                turn_pixels(work, edit.rotate)
+            args = edit_args(edit, work, tag_turn=not in_pixels)
             if ext in media.EXIF_WRITABLE:
-                self.exif.run(still_date_args(when), work)
+                self.exif.run(still_date_args(when) + args, work)
             return [place(work, self.library, name, when)], None
         if kind == "video":
             stem = os.path.splitext(name)[0]
@@ -340,7 +434,7 @@ class Developer:
                 try:
                     note = remux(src, work, self.settings.aac_bitrate, self.log)
                     self.log.debug("%s: remuxed, %s" % (name, note))
-                    self.exif.run(video_date_args(when), work)
+                    self.exif.run(video_date_args(when) + edit_args(edit, video=True), work)
                     return [place(work, self.library, stem + ".mp4", when)], None
                 except DevelopError as exc:
                     self.log.warn("%s; putting the original in the library "
@@ -348,10 +442,10 @@ class Developer:
             work = os.path.join(tmp, name)
             shutil.copyfile(src, work)
             if ext in media.EXIF_WRITABLE:
-                self.exif.run(video_date_args(when), work)
+                self.exif.run(video_date_args(when) + edit_args(edit, video=True), work)
             return [place(work, self.library, name, when)], None
         if kind in (media.SIPIX_STILL, media.SIPIX_CLIP):
-            return self._sipix(rec, src, when, tmp), None
+            return self._sipix(rec, src, when, tmp, edit), None
         return [], "not a picture or clip"
 
     def _has_jpeg_twin(self, rec):
@@ -372,7 +466,7 @@ class Developer:
         self.sipix_counter += 1
         return name
 
-    def _sipix(self, rec, src, when, tmp):
+    def _sipix(self, rec, src, when, tmp, edit=None):
         with open(src, "rb") as fh:
             data = fh.read()
         log = self.log
@@ -392,7 +486,7 @@ class Developer:
             name = self._sipix_name(".mp4")
             work = os.path.join(tmp, name)
             remux(avi, work, self.settings.aac_bitrate, log)
-            self.exif.run(video_date_args(when), work)
+            self.exif.run(video_date_args(when) + edit_args(edit, video=True), work)
             return [place(work, self.library, name, when)]
         width, height, raster, partial = blinky.decode_still(data, log)
         if partial:
@@ -402,12 +496,17 @@ class Developer:
             name = self._sipix_name(".png")
             work = os.path.join(tmp, name)
             blinky.write_png(work, width, height, raster)
+            if edit is not None and edit.rotate:
+                turn_pixels(work, edit.rotate)
         else:
             name = self._sipix_name(".jpg")
             work = os.path.join(tmp, name)
             blinky.write_jpeg(work, width, height, raster,
                               self.settings.jpeg_quality)
-        self.exif.run(still_date_args(when, "SiPix", "StyleCam Blink II"), work)
+            if edit is not None and edit.redeye:
+                fix_red_eye(work, work, edit.redeye, log)
+        args = edit_args(edit, work, tag_turn=self.settings.sipix_format != "png")
+        self.exif.run(still_date_args(when, "SiPix", "StyleCam Blink II") + args, work)
         return [place(work, self.library, name, when)]
 
 

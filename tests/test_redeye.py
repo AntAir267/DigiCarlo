@@ -143,5 +143,50 @@ class FixTests(unittest.TestCase):
         self.assertEqual(fixed[0][2], 2 * rad)
 
 
+@unittest.skipUnless(HAVE_NUMPY, "numpy or Pillow is not installed")
+class ByHandTests(unittest.TestCase):
+    def picture(self):
+        img = np.zeros((300, 400, 3), np.uint8)
+        img[:] = (206, 152, 128)
+        img[110:150, 140:180] = eye_patch()
+        return img
+
+    def test_pointing_at_an_eye_fixes_it(self):
+        img = self.picture()
+        box = redeye.box_at((400, 300), 161, 131)
+        self.assertEqual(box[2], box[3])
+        out, done = redeye.apply_fixes(Image.fromarray(img), [box])
+        self.assertEqual(done, [box])
+        r, g, b = (int(v) for v in np.asarray(out)[132, 161])
+        self.assertLess(r, 90)
+
+    def test_pointing_at_skin_does_nothing(self):
+        img = self.picture()
+        box = redeye.box_at((400, 300), 60, 250)
+        out, done = redeye.apply_fixes(Image.fromarray(img), [box])
+        self.assertEqual(done, [])
+        self.assertTrue(np.array_equal(np.asarray(out), img))
+
+    def test_box_stays_inside(self):
+        for x, y in ((0, 0), (399, 299), (-50, 500)):
+            bx, by, w, h = redeye.box_at((400, 300), x, y)
+            self.assertTrue(0 <= bx and bx + w <= 400 and 0 <= by and by + h <= 300)
+
+    def test_replaying_found_fixes_gives_the_same_picture(self):
+        img = np.zeros((300, 400, 3), np.uint8)
+        img[:] = (206, 152, 128)
+        eyes = ((160, 130), (240, 130))
+        for cx, cy in eyes:
+            img[cy - 20:cy + 20, cx - 20:cx + 20] = eye_patch()
+        face = np.zeros((1, 15), np.float32)
+        face[0, :4] = (110, 70, 180, 200)
+        face[0, 4:8] = (eyes[0][0] - 0.5, eyes[0][1] - 0.5, eyes[1][0] - 0.5, eyes[1][1] - 0.5)
+        face[0, 14] = 0.95
+        found, boxes, _ = redeye.remove_red_eye(Image.fromarray(img), faces=face)
+        again, done = redeye.apply_fixes(Image.fromarray(img), boxes)
+        self.assertEqual(len(done), 2)
+        self.assertTrue(np.array_equal(np.asarray(found), np.asarray(again)))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

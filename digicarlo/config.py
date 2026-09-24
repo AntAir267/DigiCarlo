@@ -32,6 +32,10 @@ DEFAULTS = {
         "max_gap_days": "30",
         # Sessions whose real spacing is unknown are placed this far apart.
         "session_spacing_seconds": "60",
+        # Cameras whose clock can be set right but sometimes resets: every
+        # pull from one asks, session by session, whether to trust it.
+        # Matched against the camera's model, ignoring case and hyphens.
+        "trust_clock_cameras": "i1237, KD-400Z",
     },
     "sipix": {
         # jpeg carries EXIF dates that every photo service reads; png is
@@ -85,6 +89,50 @@ class Settings:
     @property
     def jpeg_quality(self):
         return self.cp.getint("sipix", "jpeg_quality")
+
+    @property
+    def trust_clock_cameras(self):
+        return [c.strip() for c in self._get("dates", "trust_clock_cameras").split(",")
+                if c.strip()]
+
+    def asks_about_clock(self, camera):
+        """Whether pulls from `camera` should ask about trusting its clock."""
+        return any(self.asks_about_clock_static(c, camera)
+                   for c in self.trust_clock_cameras)
+
+    @staticmethod
+    def asks_about_clock_static(pattern, camera):
+        """Whether `camera` is the model `pattern` names (ignoring case,
+        spaces and hyphens)."""
+        def norm(t):
+            return "".join(ch for ch in (t or "").lower() if ch.isalnum())
+        return bool(norm(pattern)) and norm(pattern) in norm(camera)
+
+    def places(self):
+        """Saved places, [(name, latitude, longitude)], as [places] holds
+        them: one per line, "name | latitude, longitude"."""
+        out = []
+        if not self.cp.has_section("places"):
+            return out
+        for key, value in self.cp.items("places"):
+            name, _, where = value.rpartition("|")
+            try:
+                lat, lon = (float(v) for v in where.split(","))
+            except ValueError:
+                continue
+            if name.strip():
+                out.append((name.strip(), lat, lon))
+        return out
+
+    def add_place(self, name, lat, lon):
+        """Save a place (replacing one of the same name)."""
+        name = name.replace("|", "/").strip()
+        kept = [p for p in self.places() if p[0].lower() != name.lower()]
+        kept.append((name, float(lat), float(lon)))
+        self.cp.remove_section("places")
+        self.cp.add_section("places")
+        for n, (pname, plat, plon) in enumerate(kept, 1):
+            self.cp.set("places", "place%d" % n, "%s | %.6f, %.6f" % (pname, plat, plon))
 
     @property
     def sounds(self):
