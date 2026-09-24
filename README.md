@@ -22,7 +22,7 @@ of shots can be given a date of its own instead.
 
 ```bash
 ./packaging/build-deb.sh
-sudo apt install ./packaging/digicarlo_1.2.0-1_all.deb
+sudo apt install ./packaging/digicarlo_1.3.0-1_all.deb
 ```
 
 That brings in what it needs — `exiftool` to write dates, `ffmpeg` to remux
@@ -37,7 +37,7 @@ the download against the release's published `SHA256SUMS` before handing it
 to apt.
 
 To run from the source tree instead: `./digicarlo-dev` for the command,
-`./digicarlo-dev gui` for the window, `./digicarlo-dev garage` for the garage.
+`./digicarlo-dev gui` for the window, `./digicarlo-dev classic` for the old one.
 
 ## Where things go
 
@@ -87,9 +87,9 @@ Any group of shots can instead:
 - **keep the camera's own date**, for the rare camera whose clock is right;
 - go back to **automatic**.
 
-Overriding some shots never moves the ones around them. In the window, select
-shots (click a session's heading to take all of it) and use **Set date**,
-**Camera's date** or **Automatic**. On the command line:
+Overriding some shots never moves the ones around them. In the window, pick
+shots on the Photo Board (click a session's card to take all of it) and use
+the date stamp, the alarm clock or the eraser. On the command line:
 
 ```bash
 digicarlo plan                                   # sessions, and the dates they get
@@ -138,7 +138,8 @@ the pupil's own green and blue, so its shape and catchlight stay.
 On 138 flash photos from a Kodak EasyShare C613 and C315 it matches OpenCV's
 own face detector and a reference implementation byte for byte: 34 eyes in 21
 photos, with no fixes on fabric, lamps or skin. It takes about 0.8 s a photo.
-It misses some pinker red eyes; the window will let you fix those by hand.
+It misses some pinker red eyes; the Photo Board's red-eye pen lets you fix
+those by hand.
 
 ## Cameras
 
@@ -170,50 +171,57 @@ clock, so its shots are a second apart in the order it lists them.
 
 ## The window
 
-`digicarlo-gui` is a Windows 95 program that happens to be a cartoon car.
+`digicarlo-gui` is a Windows 95 program looking into a garage, pre-rendered
+in POV-Ray the way a 1995 CD-ROM game was, with a console of Nash
+Metropolitan hardware along the bottom in its factory Caribbean Blue.
+Everything in the room that can be clicked glows under the mouse and does one
+thing:
 
-The frame, menus and dialogs are Windows 95 (Qt's own "Windows" style, which
-is the real Win9x drawing code). Inside, it plays like a Humongous
-Entertainment game: the shots sit in a sunny landscape seen through the
-windshield, each pull under its own 1950s licence plate and each session
-under a signpost. Along the bottom is the dashboard of a Nash Metropolitan in
-its factory colours -- Caribbean Blue (PPG P-905 / Ditzler 41161) under a
-Snowberry White rail -- laid out the way Putt-Putt's dashboard carried his
-horn, radio and glove compartment:
-
-| On the dash | What it does |
+| In the garage | What it does |
 | --- | --- |
-| Glove box | Holds the cameras and cards plugged in; click one to pull it. The road map in there pulls from a folder |
-| Horn | Honks, and looks for cameras again |
-| Radio | Its dial says what is going on; its preset keys date the selected shots: **Set date**, **Camera**, **Auto**, **Leave out**. The left knob opens the activity log, the right one the folders |
-| Speedometer | How far the current job has got. The odometer counts every file DigiCarlo has ever put in the library |
-| Fuel gauge | Free space on the disk the library is on |
-| Clock | Now -- the time a pull's newest shot will be dated |
-| START | Puts the waiting shots in the library; while a job runs it says STOP |
+| The card in the reader | Pulls its pictures into the archive. Its tag says how many are new |
+| The camera on the bench | Pulls from the SiPix Blink II, or a PTP camera |
+| The Photo Board | Walks over to it, to date the shots waiting |
+| The darkroom door | Puts the waiting shots in the library, as START does. Its safelight is on while any are waiting |
+| The crate of originals | Opens the archive folder |
+| The car | Honks, and looks for cameras again |
+| The calendar | Today: the date a pull's newest shot gets |
 
-Select shots by clicking, shift-clicking, or clicking a session's signpost;
-right-click for the same choices. Sounds can be turned off under **View**.
+### The Photo Board
 
-Everything is drawn with thick outlines and anti-aliased text, because the
-window is rendered at the screen's scale: on Wayland at 150% a hairline or an
-unsmoothed glyph comes out thin and broken. The UI font is Nunito (the
-`fonts-nunito` package, which the .deb recommends). Like Blinky's window, the
-frame is drawn by the program, so moving and resizing are handed to the
-compositor (`startSystemMove`, `startSystemResize`) -- the only way a window
-may move itself on Wayland.
+Every shot waiting is pinned up as a print showing the time it will get,
+each session led by an index card with what the camera's clock said and the
+dates its shots will get. Click a print to pick it (Shift for a run, Ctrl
+for one more), or a card for its whole session; right-click for everything
+below. The tools on the ledge work on the picked shots:
 
-### The garage (in progress)
+| On the ledge | What it does |
+| --- | --- |
+| Date stamp | Starts them at a date you give; the rest follow with the camera's gaps |
+| Alarm clock | Keeps the camera's own dates |
+| Eraser | Back to automatic |
+| Wastebasket | Leaves them out of the library (they stay in the archive). With nothing picked, brings back the ones left out |
+| Red-eye pen | Takes the flash red out of their eyes. Each photo is shown with the fixes it would make: click one to drop it, or click a red eye it missed to add it |
+| GARAGE sign | Back to the garage |
 
-The next window is pre-rendered in POV-Ray, like a 1995 CD-ROM game, and can
-be tried with `digicarlo-gui --garage`. It is a garage: click the card in the
-reader or the camera on the bench to pull, the darkroom door (or START) to put
-the shots in the library, the crate of originals for the archive, the car to
-honk and look for cameras again. The calendar shows today, the date a pull's
-newest shot gets, and the safelight is on while shots are waiting.
+A quarter turn, a name and a place go into the library copies as they are
+made -- for a JPEG the turn is the EXIF orientation, so nothing is
+recompressed -- and the archive copy never changes. What is decided is kept
+in `~/.config/digicarlo/board.json` until the shots are developed, so closing
+the window loses nothing. Places are saved under `[places]` in the settings.
 
-The console's radio keys do what has no place in the room:
+After a pull from a camera whose clock can be right -- the Polaroid i1237 and
+Konica KD-400Z, or whatever `trust_clock_cameras` lists -- a dialog asks,
+session by session, which to date by the camera. Sessions that look like a
+reset clock (before 2010, or the stroke of New Year) come unticked.
 
-| Key | What it does |
+### The console
+
+A green screen says what is going on (click it for the activity log), a drum
+counter shows how many shots are waiting, and START puts them in the library
+(STOP while a job runs). The radio's keys do what has no place in the room:
+
+| In the garage | What it does |
 | --- | --- |
 | CHECK CARD | Reads every file on the card to its last byte, and looks in the kernel's log for read errors |
 | EJECT | Unmounts the card and powers off the reader, so it can be pulled out |
@@ -221,10 +229,28 @@ The console's radio keys do what has no place in the room:
 | SYNC | Asks Syncthing whether the phone is connected and how much of the library it has |
 | LIBRARY | Opens the library folder |
 
-After putting shots in the library it asks Syncthing to rescan the folder
-straight away. The Photo Board, for choosing dates, comes next; until then
-**View > Classic window** opens the window above. How the pictures are made
-is in [art/](art/README.md).
+| At the board | What it does |
+| --- | --- |
+| VIEW | The picked shots big, one at a time |
+| ROTATE | A quarter turn to the right |
+| NAME | A title, such as "Grandma's birthday", written as the title and description Google Photos shows |
+| PLACE | Where they were taken: GPS coordinates from a saved place, or a new one pasted from a map |
+| UNDO | Takes back the last change, one at a time |
+
+In the garage the left knob turns sounds on and off and the right opens the
+activity log; at the board they turn the pages, as do the mouse wheel and
+Page Up and Page Down. After putting shots in the library DigiCarlo asks
+Syncthing to rescan the folder, so they go to the phone straight away.
+
+The green screen is set in Glass TTY VT220 and the handwriting in Comic Neue
+(`fonts-glasstty` and `fonts-comic-neue`, which the .deb recommends). The
+frame is drawn by the program, so moving and resizing are handed to the
+compositor (`startSystemMove`, `startSystemResize`) -- the only way a window
+may move itself on Wayland. How the pictures are made is in
+[art/](art/README.md).
+
+`digicarlo-gui --classic`, or **View > Classic window**, opens the cartoon
+dashboard of 1.1 and 1.2 instead.
 
 ## Commands
 
@@ -249,6 +275,7 @@ python3 tests/test_digicarlo.py
 python3 tests/test_redeye.py
 QT_QPA_PLATFORM=offscreen python3 tests/test_gui.py
 QT_QPA_PLATFORM=offscreen python3 tests/test_garage.py
+QT_QPA_PLATFORM=offscreen python3 tests/test_board.py
 ```
 
 No camera is needed: cards are folders, the Blink II is Blinky's simulated

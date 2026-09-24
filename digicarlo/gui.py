@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""digicarlo-gui - the DigiCarlo window.
+"""digicarlo-gui --classic - the DigiCarlo window of 1.1 and 1.2.
+
+(digicarlo-gui on its own opens the garage: see garage.py.)
 
 A Windows 95 program that happens to be a cartoon car. The frame, the menus
 and the dialogs are Windows 95 (Qt's own "Windows" style is the real Win9x
@@ -25,16 +27,15 @@ this file only draws and dispatches. The drawing helpers live in cartoon.py.
 import datetime
 import math
 import os
-import queue
 import shutil
 import subprocess
 import sys
 
 from PyQt6 import sip
 from PyQt6.QtCore import (QDateTime, QPointF, QRect, QRectF, QSize, Qt,
-                          QThread, QTimer, pyqtSignal)
-from PyQt6.QtGui import (QAction, QBrush, QColor, QFont, QIcon, QImage,
-                         QImageReader, QPainter, QPainterPath, QPalette, QPen,
+                          QTimer, pyqtSignal)
+from PyQt6.QtGui import (QAction, QBrush, QColor, QFont, QIcon,
+                         QPainter, QPainterPath, QPalette, QPen,
                          QPixmap, QPolygonF, QRadialGradient)
 from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QButtonGroup,
                              QDateTimeEdit, QDialog, QFileDialog,
@@ -48,7 +49,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from digicarlo import (__version__, archive, blinky, config,   # noqa: E402
                        develop, media, sources, timeplan, update)
 from digicarlo import cartoon as toon                           # noqa: E402
-from digicarlo.jobs import GuiLog, Job                          # noqa: E402
+from digicarlo.jobs import GuiLog, Job, ThumbLoader             # noqa: E402
 from digicarlo.cartoon import (CARIBBEAN, GREY, INK, INK_SOFT,  # noqa: E402
                                MARDI_GRAS, OUTLINE, PAPER, SNOWBERRY,
                                SUNBURST, WOOD, app_icon, icon_pixmap)
@@ -1518,77 +1519,6 @@ class Windshield(QWidget):
 # Background work
 # ---------------------------------------------------------------------------
 
-class ThumbLoader(QThread):
-    """Makes thumbnails from the archive copies, newest request first."""
-
-    loaded = pyqtSignal(str, QImage)
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.q = queue.LifoQueue()
-        self.stopping = False
-
-    def request(self, key, path, kind):
-        self.q.put((key, path, kind))
-
-    def stop(self):
-        self.stopping = True
-        self.q.put(None)
-
-    def run(self):
-        while not self.stopping:
-            job = self.q.get()
-            if job is None:
-                continue
-            key, path, kind = job
-            try:
-                img = self.make(path, kind)
-            except Exception:
-                img = QImage()
-            self.loaded.emit(key, img)
-
-    @staticmethod
-    def make(path, kind):
-        box = QSize(THUMB_W * 2, THUMB_H * 2)
-        if kind in ("still", "raw"):
-            reader = QImageReader(path)
-            reader.setAutoTransform(True)
-            size = reader.size()
-            if size.isValid():
-                reader.setScaledSize(size.scaled(
-                    box, Qt.AspectRatioMode.KeepAspectRatioByExpanding))
-            img = reader.read()
-            if not img.isNull():
-                return img
-            if kind == "raw":
-                # Most raws carry a JPEG preview; exiftool can lift it out.
-                res = subprocess.run(["exiftool", "-b", "-PreviewImage", path],
-                                     capture_output=True, timeout=30)
-                if res.stdout:
-                    img = QImage.fromData(res.stdout)
-                    return img.scaled(box, Qt.AspectRatioMode.KeepAspectRatio)
-            return QImage()
-        if kind == "video":
-            res = subprocess.run(
-                ["ffmpeg", "-v", "error", "-nostdin", "-i", path, "-frames:v",
-                 "1", "-vf", "scale=%d:-2" % (THUMB_W * 2), "-f", "image2pipe",
-                 "-c:v", "png", "-"], capture_output=True, timeout=30)
-            return QImage.fromData(res.stdout) if res.stdout else QImage()
-        if kind in (media.SIPIX_STILL, media.SIPIX_CLIP):
-            with open(path, "rb") as fh:
-                data = fh.read()
-            if kind == media.SIPIX_CLIP:
-                frames = blinky.split_clip_frames(data)
-                if not frames:
-                    return QImage()
-                data = frames[0]
-            w, h, raster, _ = blinky.decode_still(data, blinky.Log(quiet=True))
-            img = QImage(raster, w, h, w * 3, QImage.Format.Format_RGB888).copy()
-            return img.scaled(box, Qt.AspectRatioMode.KeepAspectRatio,
-                              Qt.TransformationMode.SmoothTransformation)
-        return QImage()
-
-
 # ---------------------------------------------------------------------------
 # Dialogs: Windows 95, in Caribbean Blue
 # ---------------------------------------------------------------------------
@@ -2560,10 +2490,12 @@ class MainWindow(QWidget):
 
 def main(argv=None):
     argv = list(argv if argv is not None else sys.argv)
-    if "--garage" in argv:
-        # The pre-rendered window, while it is being built.
+    if "--classic" not in argv:
+        # The garage is the window now; this one stays a while as the
+        # classic window (digicarlo-gui --classic, or View > Classic window).
         from digicarlo import garage
         return garage.main([a for a in argv if a != "--garage"])
+    argv = [a for a in argv if a != "--classic"]
     app = QApplication(argv)
     app.setApplicationName("DigiCarlo")
     app.setApplicationDisplayName("DigiCarlo")

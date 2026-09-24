@@ -1,5 +1,5 @@
 #!/bin/sh
-# Run DigiCarlo from the source tree. Usage: ./digicarlo-dev [gui|garage] ARGS...
+# Run DigiCarlo from the source tree. Usage: ./digicarlo-dev [gui|garage|classic] ARGS...
 dir=$(dirname "$(readlink -f "$0")")
 export PYTHONPATH="$dir${PYTHONPATH:+:$PYTHONPATH}"
 py=python3
@@ -11,5 +11,9 @@ fi
 if [ "$1" = gui ]; then
     shift
     exec "$py" -c 'import sys; from digicarlo.gui import main; sys.exit(main())' "$@"
+fi
+if [ "$1" = classic ]; then
+    shift
+    exec "$py" -c 'import sys; from digicarlo.gui import main; sys.exit(main())' --classic "$@"
 fi
 exec "$py" -m digicarlo "$@"

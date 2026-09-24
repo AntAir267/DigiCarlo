@@ -1,25 +1,67 @@
-.TH DIGICARLO-GUI 1 "2026-09-23" "DigiCarlo 1.1.0" "User Commands"
+.TH DIGICARLO-GUI 1 "2026-09-23" "DigiCarlo 1.3.0" "User Commands"
 .SH NAME
 digicarlo-gui \- the DigiCarlo window
 .SH SYNOPSIS
 .B digicarlo-gui
+.RB [ \-\-classic ]
 .SH DESCRIPTION
-The window does what \fBdigicarlo\fR(1) does, dressed as a cartoon Nash
-Metropolitan. Waiting shots appear through the windshield, in sessions, each
-print showing the date it will get. Select shots (click, shift-click,
-ctrl-click, or click a session's signpost) and use the radio's preset keys:
-\fBSet date\fR, \fBCamera\fR, \fBAuto\fR or \fBLeave out\fR.
+The window does what \fBdigicarlo\fR(1) does, as a Windows 95 program looking
+into a garage pre-rendered the way a 1995 CD-ROM game was, with a console of
+Nash Metropolitan hardware along the bottom.
+.SS The garage
+Click the card in the reader, or the camera on the bench, to pull its new
+pictures into the archive; the card's tag says how many are new. The Photo
+Board is where the waiting shots are dated. The darkroom door, like
+\fBSTART\fR, puts them in the library. The crate of originals opens the
+archive folder, and the car honks and looks for cameras again. The calendar
+shows today, the date a pull's newest shot gets, and the safelight is on
+while shots are waiting.
 .PP
-The cameras and cards plugged in are in the glove box; click one to pull its
-new pictures into the archive, or the road map to pull from a folder. The
-horn looks for cameras again. \fBSTART\fR puts the waiting shots in the
-library, and stops a job that is running.
+The radio's keys in the garage:
+.TP
+.B CHECK CARD
+Read every file on the card to its end, and look in the kernel's log for
+read errors.
+.TP
+.B EJECT
+Unmount the card and power off the reader, so it can be pulled out.
+.TP
+.B ERASE CARD
+Empty the card for next time: only when every file on it has a copy in the
+archive, compared byte for byte, and otherwise nothing.
+.TP
+.B SYNC
+Ask Syncthing whether the phone is connected, and how much of the library
+it has.
+.TP
+.B LIBRARY
+Open the library folder.
+.SS The Photo Board
+Every waiting shot is pinned up as a print, each session led by an index
+card with what the camera's clock said and the dates its shots will get.
+Click a print to pick it (Shift for a run, Ctrl for one more), or a card
+for its whole session. On the ledge: the date stamp starts the picked shots
+at a date you give; the alarm clock keeps the camera's own dates; the eraser
+goes back to automatic; the wastebasket leaves them out (with nothing
+picked, it brings back the ones left out); the red-eye pen takes the flash
+red out of their eyes. The radio's keys there are \fBVIEW\fR, \fBROTATE\fR,
+\fBNAME\fR, \fBPLACE\fR and \fBUNDO\fR; its knobs, the mouse wheel and Page
+Up/Down turn the pages.
 .PP
-The speedometer shows how far a job has got; its odometer counts every file
-DigiCarlo has put in the library. The fuel gauge shows free space where the
-library is, and the clock is the time a pull's newest shot will be dated.
+Rotation, names, places and red-eye fixes go into the library copies as
+they are made; the archive copy never changes. What is decided is kept in
+\fI~/.config/digicarlo/board.json\fR until the shots are developed.
 .PP
-It needs PyQt6 (\fBpython3-pyqt6\fR), and looks as intended with Nunito
-(\fBfonts-nunito\fR).
+After a pull from a camera whose clock can be right (the Polaroid i1237 and
+Konica KD-400Z to begin with; see \fBtrust_clock_cameras\fR), a dialog asks
+which of its sessions to date by the camera.
+.SH OPTIONS
+.TP
+.B \-\-classic
+The window of DigiCarlo 1.1 and 1.2 instead.
+.SH NOTES
+It needs PyQt6 (\fBpython3-pyqt6\fR). The green screen looks as intended with
+\fBfonts-glasstty\fR, the handwriting with \fBfonts-comic-neue\fR, and the
+printing with \fBfonts-nunito\fR. The red-eye pen needs \fBpython3-numpy\fR.
 .SH SEE ALSO
 .BR digicarlo (1)

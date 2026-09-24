@@ -4,7 +4,7 @@ set -e
 
 here=$(cd "$(dirname "$0")" && pwd)
 src=$(dirname "$here")
-version=1.2.0
+version=1.3.0
 revision=1
 pkg="digicarlo_${version}-${revision}_all"
 build="$here/build/$pkg"
@@ -112,8 +112,9 @@ Description: get the pictures off old digital cameras, with dates that are right
  video stream copied untouched and only audio MP4 cannot carry, such as 8-bit
  PCM, converted to AAC.
  .
- The window, digicarlo-gui, is a Windows 95 program dressed as a cartoon Nash
- Metropolitan, its controls on the dashboard the way Putt-Putt's were. It
+ The window, digicarlo-gui, is a Windows 95 program looking into a garage
+ pre-rendered the way a 1995 CD-ROM game was: pull from the card in the
+ reader, date the shots on the Photo Board, develop at the darkroom door. It
  needs python3-pyqt6; the digicarlo command does not. The SiPix Blink II is
  driven by Blinky's driver, included, and needs python3-usb; a udev rule is
  installed so it works without root. USB cameras that speak PTP need gphoto2.

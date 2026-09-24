@@ -1,4 +1,4 @@
-"""digicarlo-gui --garage: the pre-rendered window.
+"""digicarlo-gui: the pre-rendered window.
 
 A Windows 95 window looking into a garage, pre-rendered the way a 1995 CD-ROM
 game was, with a console of Nash Metropolitan hardware along the bottom.
@@ -24,6 +24,7 @@ The calendar on the wall shows today, which is the date a pull's newest shot
 gets; the safelight over the darkroom is on while anything is waiting.
 """
 
+import copy
 import datetime
 import os
 import re
@@ -41,9 +42,11 @@ from PyQt6.QtWidgets import (QApplication, QDialog, QFileDialog, QHBoxLayout,
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from digicarlo import (__version__, archive, blinky, cardtools, config,  # noqa: E402
-                       develop, sources, syncthing, timeplan, update)
+                       develop, edits, sources, syncthing, timeplan, update)
 from digicarlo import cartoon as toon                                   # noqa: E402
 from digicarlo import win95                                             # noqa: E402
+from digicarlo.boardroom import BoardRoom                               # noqa: E402
+from digicarlo.dialogs import TrustDialog                               # noqa: E402
 from digicarlo.jobs import GuiLog, Job                                  # noqa: E402
 from digicarlo.stage import (HANDWRITTEN, PRINTED, TERMINAL, Picture,  # noqa: E402
                              Stage, font)
@@ -118,16 +121,28 @@ class GarageWindow(win95.Window):
         self.cursor_on = True
         self.classic = None
         self.today = datetime.date.today()
+        self.room = "garage"            # or "board"
+        self.board_key = 0              # a board key, while it is held down
+        self.trust_next = None          # (batch id, camera) to ask about
+        self.board = edits.Board(os.path.join(os.path.dirname(self.settings.path),
+                                              "board.json"))
 
         self.lay.addWidget(self._menus())
-        self.room = Picture("garage")
-        self.room.painter = self._paint_room
+        self.garage_pic = Picture("garage")
+        self.garage_pic.painter = self._paint_room
         self.console = Picture("console")
-        self.stage = Stage([self.room, self.console], self)
+        self.stage = Stage([self.garage_pic, self.console], self)
         self.stage.live = self._live
         self.stage.tip = self._tip
+        self.stage.items = self._items
+        self.stage.quiet = {"cork"}
         self.stage.overlays.append(self._paint_screen)
         self.stage.clicked.connect(self._clicked)
+        self.stage.double_clicked.connect(self._double_clicked)
+        self.stage.context.connect(self._context)
+        self.stage.wheeled.connect(self._wheeled)
+        self.boardroom = BoardRoom(self)
+        self.stage.overlays.append(self.boardroom.paint_hover)
         self.lay.addWidget(self.stage, 1)
         self.lay.addWidget(self._status_bar())
         self._fit_to_screen()
@@ -185,8 +200,31 @@ class GarageWindow(win95.Window):
         self._act(g, "&Sync", lambda: self.push_key(4))
         self._act(g, "Li&brary", lambda: self.push_key(5))
         g.addSeparator()
-        self._act(g, "&Photo Board", self.photo_board)
+        self._act(g, "&Photo Board", lambda: self.go("board"), "Ctrl+B")
+        self._act(g, "Back to the &garage", lambda: self.go("garage"), "Ctrl+G")
         self._act(g, "&Put in library", self.develop, "Ctrl+Return")
+        s = bar.addMenu("&Shots")
+        br = self.boardroom_do
+        self._act(s, "Select &all", lambda: br("select_all"), "Ctrl+A")
+        self._act(s, "Pick &none", lambda: br("clear"), "Esc")
+        s.addSeparator()
+        self._act(s, "Set a &date...", lambda: br("stamp"), "Ctrl+D")
+        self._act(s, "Keep the &camera's date", lambda: br("clock"))
+        self._act(s, "A&utomatic date", lambda: br("eraser"))
+        s.addSeparator()
+        self._act(s, "&View", lambda: br("view"), "Space")
+        self._act(s, "Rotate &right", lambda: br("rotate", 1), "Ctrl+R")
+        self._act(s, "Rotate &left", lambda: br("rotate", 3), "Ctrl+Shift+R")
+        self._act(s, "&Name...", lambda: br("name"), "Ctrl+N")
+        self._act(s, "&Place...", lambda: br("place"), "Ctrl+P")
+        self._act(s, "Red &eye...", lambda: br("pen"), "Ctrl+E")
+        s.addSeparator()
+        self._act(s, "&Leave out", lambda: br("wastebasket"), "Del")
+        self._act(s, "&Bring back left-out shots", self.bring_back)
+        self._act(s, "&Undo", lambda: br("undo"), "Ctrl+Z")
+        s.addSeparator()
+        self._act(s, "Next pa&ge", lambda: br("turn_page", 1), "PgDown")
+        self._act(s, "Previous pag&e", lambda: br("turn_page", -1), "PgUp")
         v = bar.addMenu("&View")
         self.sound_action = self._act(v, "&Sounds", self._toggle_sounds)
         self.sound_action.setCheckable(True)
@@ -237,6 +275,7 @@ class GarageWindow(win95.Window):
             self.job.wait(30000)
         if self.scan_job is not None:
             self.scan_job.wait(10000)
+        self.boardroom.stop()
         super().closeEvent(e)
 
     # -- what is where ---------------------------------------------------------------
@@ -260,10 +299,13 @@ class GarageWindow(win95.Window):
         room = [k for k, on in (("card", bool(self.cards())),
                                 ("blink", bool(self.cameras())),
                                 ("safelight", n > 0)) if on]
-        self.room.set_pieces(room)
-        self.room.invalidate()          # the tag, sticky and calendar change
+        self.garage_pic.set_pieces(room)
+        self.garage_pic.invalidate()          # the tag, sticky and calendar change
+        self.boardroom.pic.set_pieces(["trash"] if self.arc.skipped else [])
         console = []
-        if self.key:
+        if self.room == "board":
+            console.append("board-key%d" % self.board_key if self.board_key else "board-dial")
+        elif self.key:
             console.append("key%d" % self.key)
         if self.busy():
             console.append("stop")
@@ -301,6 +343,8 @@ class GarageWindow(win95.Window):
             return screen(self.caption)
         if self.lit_screen and (self.key or time.monotonic() < self.note_until):
             return self.lit_screen
+        if self.room == "board":
+            return screen(*self.boardroom.screen())
         return self.idle_screen()
 
     def idle_screen(self):
@@ -328,11 +372,16 @@ class GarageWindow(win95.Window):
         self.note_until = time.monotonic() + 8
         self.stage.update()
 
+    def quiet_note(self):
+        """Let the usual screen back now (the picks changed)."""
+        if not self.key:
+            self.note_until = 0.0
+
     def _blink(self):
         self.cursor_on = not self.cursor_on
         if datetime.date.today() != self.today:
             self.today = datetime.date.today()
-            self.room.invalidate()
+            self.garage_pic.invalidate()
         self.stage.update()
 
     def _paint_screen(self, p, stage):
@@ -433,7 +482,14 @@ class GarageWindow(win95.Window):
 
     # -- the mouse -------------------------------------------------------------------------
 
+    def _items(self, pic, x, y):
+        if pic == "board":
+            return self.boardroom.hit(x, y)
+        return None
+
     def _live(self, pic, spot):
+        if pic == "board":
+            return self.boardroom.live(spot)
         if pic == "garage":
             if spot == "card":
                 return bool(self.cards())
@@ -450,6 +506,17 @@ class GarageWindow(win95.Window):
 
     def _tip(self, pic, spot):
         n = self.waiting()
+        if pic == "board":
+            return self.boardroom.tip(spot)
+        if pic == "console" and self.room == "board":
+            tip = {"key1": "View: see the picked shots big",
+                   "key2": "Rotate: turn the picked shots a quarter to the right",
+                   "key3": "Name: give the picked shots a title",
+                   "key4": "Place: say where the picked shots were taken",
+                   "key5": "Undo: take back the last change",
+                   "knob-left": "Previous page", "knob-right": "Next page"}.get(spot)
+            if tip:
+                return tip
         if pic == "garage":
             if spot == "card":
                 src = self.cards()[0]
@@ -477,11 +544,17 @@ class GarageWindow(win95.Window):
                          "Put %s in the library" % plural(n, "shot")}.get(spot, "")
 
     def _clicked(self, pic, spot):
+        if pic == "board":
+            self.boardroom.clicked(spot)
+            return
+        if pic == "console" and self.room == "board" and spot.startswith("knob"):
+            self.boardroom.turn_page(-1 if spot == "knob-left" else 1)
+            return
         if pic == "garage":
             {"card": lambda: self.pull_from(self.cards()),
              "blink": lambda: self.pull_from(self.cameras()),
              "door": self.develop,
-             "board": self.photo_board,
+             "board": lambda: self.go("board"),
              "crate": lambda: self._open(self.settings.archive),
              "car": self.honk}[spot]()
             return
@@ -497,6 +570,45 @@ class GarageWindow(win95.Window):
             self._toggle_sounds(not self.settings.sounds)
         elif spot in ("knob-right", "screen"):
             self.show_log()
+
+    def _double_clicked(self, pic, spot):
+        if pic == "board":
+            self.boardroom.double_clicked(spot)
+
+    def _context(self, pic, spot, where):
+        if pic == "board":
+            self.boardroom.context_menu(spot, where)
+
+    def _wheeled(self, pic, step):
+        if pic == "board":
+            self.boardroom.turn_page(step)
+
+    # -- walking between rooms ---------------------------------------------------------
+
+    def go(self, room):
+        if room == self.room:
+            return
+        self.room = room
+        self.key, self.board_key, self.lit_screen = 0, 0, []
+        self.stage.set_picture(0, self.boardroom.pic if room == "board" else self.garage_pic)
+        self.set_title("DigiCarlo - Photo Board" if room == "board" else "DigiCarlo - The Garage")
+        if room == "board":
+            self.boardroom.relayout()
+        self.show_state()
+
+    def boardroom_do(self, name, *args):
+        """A Shots menu command: done at the board."""
+        self.go("board")
+        getattr(self.boardroom, name)(*args)
+
+    def bring_back(self):
+        self.go("board")
+        self.boardroom.selected.clear()
+        self.boardroom.wastebasket()
+
+    @staticmethod
+    def today_now():
+        return datetime.datetime.now().replace(second=0, microsecond=0)
 
     # -- startup and scanning --------------------------------------------------------------
 
@@ -565,9 +677,14 @@ class GarageWindow(win95.Window):
         except archive.ArchiveBusy:
             pass
         batches = develop.plan_batches(self.arc, log)
-        self.plan = timeplan.build(batches, [],
+        # Forget decisions about shots developed or left out since; keep any
+        # about shots this archive does not know (another archive's).
+        waiting = {s.key for b in batches for s in b.shots}
+        self.board.prune(waiting | {k for k in self.board.keys() if k not in self.arc.files})
+        self.plan = timeplan.build(batches, self.board.overrides,
                                    max_gap_days=self.settings.max_gap_days,
                                    spacing=self.settings.session_spacing)
+        self.boardroom.relayout()
         self.show_state()
 
     # -- jobs ----------------------------------------------------------------------------
@@ -613,6 +730,29 @@ class GarageWindow(win95.Window):
         self.rescan()
         if self.last_ok and self.settings.sounds:
             toon.play("beepbeep")
+        if self.trust_next is not None:
+            self.later(0, self._ask_trust)
+
+    def _ask_trust(self):
+        """After a pull from a camera whose clock can be right: which of its
+        sessions to date by it."""
+        bid, camera = self.trust_next
+        self.trust_next = None
+        sessions = [s for s in self.plan.sessions if s.batch.id == bid]
+        if not sessions:
+            return
+        dlg = TrustDialog(self, camera, sessions)
+        ok = dlg.exec() == QDialog.DialogCode.Accepted
+        if not dlg.again.isChecked():
+            keep = [c for c in self.settings.trust_clock_cameras
+                    if not config.Settings.asks_about_clock_static(c, camera)]
+            self.settings.set("dates", "trust_clock_cameras", ", ".join(keep))
+            self.settings.save()
+        keys = dlg.trusted() if ok else set()
+        if keys:
+            self.board.set_dates(keys, "camera")
+            self.replan()
+            self.say("%s: dated by the camera's clock." % plural(len(keys), "shot"))
 
     # -- pulling and developing ---------------------------------------------------------------
 
@@ -653,6 +793,8 @@ class GarageWindow(win95.Window):
                                       ", %d already imported" % skipped if skipped else "")
         self.lines.append("OUT   " + text)
         self.last_ok = not failed
+        if res.new and res.batch and self.settings.asks_about_clock(res.camera or ""):
+            self.trust_next = (res.batch["id"], res.camera)
         if failed:
             names = "\n".join("  %s: %s" % f for f in res.failed[:12])
             more = "\n  ...and %d more" % (failed - 12) if failed > 12 else ""
@@ -677,12 +819,13 @@ class GarageWindow(win95.Window):
                              "question", ("Put in library", "Cancel")):
             return
         plan, settings = self.plan, self.settings
+        decided = copy.deepcopy(self.board.edits)
 
         def work(job, log):
             arc = archive.Archive(settings.archive)
             with arc.locked():
                 return develop.Developer(arc, settings, log).develop(
-                    plan, progress=job.progress, cancel=job.cancel)
+                    plan, progress=job.progress, cancel=job.cancel, edits=decided)
         self.key, self.lit_screen = 0, []
         self.run(work, self._developed, "Putting shots in the library")
 
@@ -709,15 +852,6 @@ class GarageWindow(win95.Window):
         except syncthing.SyncthingError as exc:
             self.lines.append("INFO  %s" % exc)
 
-    def photo_board(self):
-        if win95.message(self, "Photo Board",
-                         "The Photo Board is being built next: pinned shots, "
-                         "with the date stamp, the clock and the wastebasket on "
-                         "its ledge.\n\nUntil then, dates can be chosen in the "
-                         "classic window.", "info",
-                         ("Open the classic window", "Not now")):
-            self.open_classic()
-
     def open_classic(self):
         from digicarlo import gui
         if self.classic is not None and not sip.isdeleted(self.classic) \
@@ -732,6 +866,17 @@ class GarageWindow(win95.Window):
     # -- the radio keys --------------------------------------------------------------------------
 
     def push_key(self, k):
+        if self.room == "board":
+            # At the board the keys are pressed and spring back.
+            if self.busy():
+                self.say("Busy: %s." % self.caption.rstrip("."))
+                return
+            self.board_key = k
+            self.show_state()
+            self.stage.repaint()
+            self.later(350, self._release_board_key)
+            self.boardroom.key(k)
+            return
         if self.key == k and not self.busy():
             self.key, self.lit_screen = 0, []          # push it again: it pops out
             self.show_state()
@@ -743,6 +888,10 @@ class GarageWindow(win95.Window):
         if self.settings.sounds:
             toon.play("beepbeep")
         getattr(self, "key_" + KEYS[k])()
+        self.show_state()
+
+    def _release_board_key(self):
+        self.board_key = 0
         self.show_state()
 
     def _card(self):

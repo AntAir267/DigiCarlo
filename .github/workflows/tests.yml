@@ -30,6 +30,7 @@ jobs:
         run: |
           python tests/test_digicarlo.py
           python tests/test_redeye.py
+          python tests/test_board.py
 
   gui:
     runs-on: ubuntu-latest
@@ -47,6 +48,7 @@ jobs:
         run: |
           python3 tests/test_gui.py
           python3 tests/test_garage.py
+          python3 tests/test_board.py
 
   package:
     runs-on: ubuntu-latest

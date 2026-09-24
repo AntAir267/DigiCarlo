@@ -300,20 +300,20 @@ class GarageWindowTests(unittest.TestCase):
         self.assertIn("start", on)
         self.assertEqual([k for k in on if k.startswith("drum")],
                          ["drum0-0", "drum1-0", "drum2-0", "drum3-3"])
-        self.assertIn("safelight", self.win.room.on)
+        self.assertIn("safelight", self.win.garage_pic.on)
 
     def test_card_appears_with_its_count(self):
-        self.assertNotIn("card", self.win.room.on)
+        self.assertNotIn("card", self.win.garage_pic.on)
         self.assertFalse(self.win._live("garage", "card"))
         self.plug_in()
-        self.assertIn("card", self.win.room.on)
-        hit = self.win.stage.spot_under(self.point_of(self.win.room, "card"))
+        self.assertIn("card", self.win.garage_pic.on)
+        hit = self.win.stage.spot_under(self.point_of(self.win.garage_pic, "card"))
         self.assertEqual(hit[1], "card")
         self.assertIn("2 new pictures", self.win._tip("garage", "card"))
         self.assertIn("KODAK", " ".join(self.win.screen_lines()))
 
     def test_hotspots_are_where_the_things_are(self):
-        for pic, spots in ((self.win.room, ("door", "board", "crate", "car")),
+        for pic, spots in ((self.win.garage_pic, ("door", "board", "crate", "car")),
                            (self.win.console, ("key1", "key5", "start", "screen"))):
             for spot in spots:
                 hit = self.win.stage.spot_under(self.point_of(pic, spot))
@@ -322,7 +322,7 @@ class GarageWindowTests(unittest.TestCase):
 
     def test_pictures_compose(self):
         self.plug_in()
-        img = self.win.room.composed()
+        img = self.win.garage_pic.composed()
         self.assertEqual((img.width(), img.height()), (2544, 1080))
         img = self.win.console.composed()
         self.assertEqual((img.width(), img.height()), (2544, 460))

@@ -18,5 +18,5 @@ Modules:
     blinky    the SiPix Blink II driver, taken from Blinky (see BLINKY_SOURCE)
 """
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 APP_NAME = "DigiCarlo"

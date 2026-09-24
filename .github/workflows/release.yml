@@ -42,6 +42,7 @@ jobs:
           python3 tests/test_redeye.py
           python3 tests/test_gui.py
           python3 tests/test_garage.py
+          python3 tests/test_board.py
 
       - name: Build the package
         run: ./packaging/build-deb.sh
