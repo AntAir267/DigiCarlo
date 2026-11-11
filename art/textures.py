@@ -59,13 +59,35 @@ for i in range(7):
     d.rectangle([22 + i * 28, 10, 38 + i * 28, 60], fill=(255, 205, 60))
 im.save("tex/sdcard.png")
 
-# the Metropolitan's licence plate
-im = Image.new("RGB", (300, 150), (246, 214, 70))
-d = ImageDraw.Draw(im)
-d.rectangle([4, 4, 295, 145], outline=(40, 30, 20), width=5)
-d.text((150, 30), "1 9 5 7", font=font("nunito", 22), fill=(40, 30, 20), anchor="mm")
-d.text((150, 88), "DIGI 57", font=font("nunito", 70), fill=(40, 30, 20), anchor="mm")
-im.save("tex/plate.png")
+# the Metropolitan's licence plate: Illinois 1957, white on red in Illinois
+# State's colours, "19 ILLINOIS 57" over the number and the state's slogan
+# under it, the letters stamped up out of the plate
+def plate(path, scale=1):
+    W, H = 600 * scale, 300 * scale
+    red, white, shade = (186, 34, 32), (244, 240, 230), (110, 16, 16)
+    im = Image.new("RGB", (W, H), red)
+    d = ImageDraw.Draw(im)
+    s = scale
+    d.rounded_rectangle([6 * s, 6 * s, W - 7 * s, H - 7 * s], 18 * s, outline=(214, 70, 62), width=5 * s)
+    d.rounded_rectangle([11 * s, 11 * s, W - 12 * s, H - 12 * s], 14 * s, outline=shade, width=2 * s)
+    for x in (110 * s, W - 110 * s):                       # bolt slots
+        for y in (30 * s, H - 30 * s):
+            d.rounded_rectangle([x - 16 * s, y - 7 * s, x + 16 * s, y + 7 * s], 7 * s, fill=(40, 10, 10))
+    cond = ImageFont.truetype("/home/antair/.local/share/fonts/FRADMCN.TTF", 46 * s)
+    big = ImageFont.truetype("/home/antair/.local/share/fonts/FRADMCN.TTF", 190 * s)
+    small = ImageFont.truetype("/home/antair/.local/share/fonts/FRADMCN.TTF", 40 * s)
+    def stamp(draw, xy, text, f):
+        draw.text((xy[0] + 3 * s, xy[1] + 4 * s), text, font=f, fill=shade, anchor="mm")
+        draw.text(xy, text, font=f, fill=white, anchor="mm")
+    stamp(d, (W / 2, 46 * s), "19 ILLINOIS 57", cond)
+    stamp(d, (W / 2, 158 * s), "CARLO", big)
+    # the slogan leans, as it did on the plate
+    lay = Image.new("RGBA", (W, 70 * s), (0, 0, 0, 0))
+    stamp(ImageDraw.Draw(lay), (W / 2, 35 * s), "LAND OF LINCOLN", small)
+    lay = lay.transform(lay.size, Image.AFFINE, (1, 0.22, -0.22 * 35 * s, 0, 1, 0), Image.BICUBIC)
+    im.paste(lay, (0, H - 82 * s), lay)
+    im.save(path)
+plate("tex/plate.png")
 
 # crate label
 im = Image.new("RGB", (480, 110), (250, 250, 246))
@@ -81,9 +103,10 @@ im.save("tex/develop.png")
 
 # paper tags for the tools on the Photo Board's ledge, handwritten
 for name, text in (("t_stamp", "set a date"), ("t_clock", "camera's date"), ("t_eraser", "automatic"),
-                   ("t_bin", "leave out"), ("t_pen", "red eye")):
-    im = Image.new("RGB", (340, 90), (251, 249, 242))
+                   ("t_bin", "leave out"), ("t_pen", "red eye"), ("t_garage", "back to garage")):
+    w = max(340, font("hand", 44).getbbox(text)[2] + 40)     # board.pov sizes each tag to match
+    im = Image.new("RGB", (w, 90), (251, 249, 242))
     d = ImageDraw.Draw(im)
-    d.text((170, 44), text, font=font("hand", 44), fill=(40, 30, 20), anchor="mm")
+    d.text((w / 2, 44), text, font=font("hand", 44), fill=(40, 30, 20), anchor="mm")
     im.save(f"tex/{name}.png")
 print("textures ok")

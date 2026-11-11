@@ -46,6 +46,9 @@ DEFAULTS = {
     "window": {
         # The horn honks, and a job that finishes beeps twice.
         "sounds": "yes",
+        # Where the garage window's sunsets and sunrises are worked out for,
+        # "latitude, longitude"; empty: the place the time zone is named for.
+        "location": "",
     },
     "video": {
         # Audio that MP4 cannot hold (8-bit PCM and the like) becomes AAC at
@@ -137,6 +140,12 @@ class Settings:
     @property
     def sounds(self):
         return self.cp.getboolean("window", "sounds", fallback=True)
+
+    @property
+    def location(self):
+        """(latitude, longitude) for the garage's day and night."""
+        from . import sun
+        return sun.where(self._get("window", "location"))
 
     @property
     def aac_bitrate(self):

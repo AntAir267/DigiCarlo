@@ -10,8 +10,9 @@
 // left sees).
 //
 // Needs from the including scene: T_Chrome, and the Hot() macro. Declares
-// Metropolitan, and reads HotLights and HotCar (numbers for Hot), Beams
-// (headlights on), Paint and Contrast (the two colours).
+// Metropolitan and MetropolitanToy (the same, without beams or hotspots of
+// its own), and reads HotLights (a number for Hot), Beams (headlights on),
+// Paint and Contrast (the two colours).
 
 #ifndef (Beams) #declare Beams = 0; #end
 #ifndef (Paint) #declare Paint = srgb <0.18, 0.64, 0.73>; #end         // Caribbean Blue
@@ -96,16 +97,41 @@
   finish { F_CarPaint }
 }
 
-#declare Body = isosurface {
-  function { f_body(x, y, z) }
-  contained_by { box { <-20, 16, -82>, <385, 145, 82> } }
-  max_gradient 2.2
-  accuracy 0.005
+#macro BodyShape(Tex)
+  isosurface {
+    function { f_body(x, y, z) }
+    contained_by { box { <-20, 16, -82>, <385, 145, 82> } }
+    max_gradient 2.2
+    accuracy 0.005
+    texture { Tex }
+  }
+#end
+#declare Body = BodyShape(
   texture {
     function { select(y - 97, 0, select(f_windows(x, y, z), 1, 0)) }
     texture_map { [0 T_Paint2] [0.5 T_Paint2] [0.5 T_Glass] [1 T_Glass] }
-  }
+  })
+
+// The toy's windows, seen side on: the windshield stops at its corners
+// instead of wrapping round, the door glass leans back with the windshield
+// pillar, and each pane has a bright surround, as die-cast windows do; the
+// glass is smoked plastic.
+#declare f_toywindows = function(x, y, z) {
+  min(min(f_box3(x - 180, y - 116, z, 22, 19, 47),                              // windshield
+          max(f_box3(x - 214, y - 116, abs(z) - 60, 34, 16, 22),
+              -0.83 * (x - 174) + 0.56 * (y - 93))),                            // door windows
+      min(f_box3(x - 267, y - 114, abs(z) - 60, 15, 14, 22),                    // rear quarters
+          f_box3(x - 300, y - 117, z, 16, 17, 47)))                             // rear window
 }
+#declare T_ToyTrim = texture { pigment { srgb <0.84, 0.85, 0.87> }
+                               finish { ambient 0 diffuse 0.35 specular 0.9 roughness 0.003 metallic reflection { 0.35 metallic } } }
+#declare T_ToyGlass = texture { pigment { srgb <0.17, 0.23, 0.29> }
+                                finish { ambient 0 diffuse 0.4 specular 0.9 roughness 0.002 reflection { 0.08, 0.35 fresnel on } } }
+#declare ToyBody = BodyShape(
+  texture {
+    function { select(y - 97, 0, select(f_toywindows(x, y, z), select(f_toywindows(x, y, z) + 2.5, 1, 0.5), 0)) }
+    texture_map { [0 T_Paint2] [0.25 T_Paint2] [0.25 T_ToyTrim] [0.75 T_ToyTrim] [0.75 T_ToyGlass] [1 T_ToyGlass] }
+  })
 
 #macro OnBody(X, Y, Side)
   // the point on the body's side (Side = -1 or 1) at X, Y
@@ -123,7 +149,9 @@
 
 #declare HeadL = OnFront(74, -54);
 #declare HeadR = OnFront(74, 54);
-#macro Headlight(P)
+// Live = 0 for the toy: no beams, and not a hotspot of its own
+#macro Headlight(P, Live)
+  #local On = Beams * Live;
   union {
     torus { 10.2, 1.9 rotate z*90 translate P + <-0.8, 0, 0> texture { T_Chrome } }
     difference {
@@ -133,18 +161,18 @@
     }
     sphere { 0, 9.4 scale <0.36, 1, 1> translate P + <0.6, 0, 0>
       texture {
-        #if (Beams)
+        #if (On)
           pigment { srgb <1, 0.97, 0.86> } finish { ambient 0 emission 1.4 diffuse 0.3 }
         #else
           pigment { srgb <0.93, 0.95, 0.96> }
           finish { ambient 0 emission 0.08 diffuse 0.35 specular 0.95 roughness 0.001 reflection 0.35 }
         #end
       }
-      #if (Beams) no_shadow #end
+      #if (On) no_shadow #end
     }
-    Hot(HotLights)
+    #if (Live) Hot(HotLights) #end
   }
-  #if (Beams)
+  #if (On)
     light_source { P + <-6, 0, 0> srgb <1, 0.95, 0.82> * 1.8
                    // at the floor ahead and to the left, where it meets the room
                    // between the car and the darkroom door, clear of the bench
@@ -210,8 +238,8 @@
     translate <0, 34, 0>
     texture { T_Chrome }
   }
-  #for (S, -1, 1, 2)
-    superellipsoid { <0.5, 0.35> scale <4.5, 15, 3.4> translate <-9.5, 41, S * 24> texture { T_Chrome } }
+  #for (Sd, -1, 1, 2)
+    superellipsoid { <0.5, 0.35> scale <4.5, 15, 3.4> translate <-9.5, 41, Sd * 24> texture { T_Chrome } }
   #end
   box { <0, 0, -0.3>, <30, 15, 0.3> texture { pigment { image_map { png "tex/plate.png" interpolate 2 } scale <30, 15, 1> }
                                                finish { ambient 0 diffuse 0.8 specular 0.3 } }
@@ -249,12 +277,14 @@
   }
 #end
 
-#declare Metropolitan = union {
-  object { Body }
-  Headlight(HeadL)
-  Headlight(HeadR)
-  ParkingLight(OnFront(61, -54) + <-0.4, 0, 0>)
-  ParkingLight(OnFront(61, 54) + <-0.4, 0, 0>)
+#macro Nash(Live)
+union {
+  #if (Live) object { Body } #else object { ToyBody } #end
+  Headlight(HeadL, Live)
+  Headlight(HeadR, Live)
+  // under the headlights, clear of their chrome rims (which reach down to 62)
+  ParkingLight(OnFront(54, -54) + <-0.4, 0, 0>)
+  ParkingLight(OnFront(54, 54) + <-0.4, 0, 0>)
   object { Grille }
   object { Bumper }
   Spear(-1)
@@ -274,8 +304,8 @@
     translate OnBody(128, 86, -1) + <0, -1, 2>
   }
   // a door handle each side
-  #for (S, -1, 1, 2)
-    box { <-4.5, -0.7, 0>, <4.5, 0.7, S * 1.4> texture { T_Chrome } translate OnBody(236, 88, S) }
+  #for (Sd, -1, 1, 2)
+    box { <-4.5, -0.7, 0>, <4.5, 0.7, Sd * 1.4> texture { T_Chrome } translate OnBody(236, 88, Sd) }
   #end
   // the back: a bumper, tail lights, and the spare in its continental cover
   sphere_sweep {
@@ -285,8 +315,8 @@
     scale <1, 1.2, 1> translate <0, 36, 0>
     texture { T_Chrome }
   }
-  #for (S, -1, 1, 2)
-    sphere { 0, 4.5 scale <0.5, 1, 1> translate trace(Body, <460, 66, S * 56>, <-1, 0, 0>)
+  #for (Sd, -1, 1, 2)
+    sphere { 0, 4.5 scale <0.5, 1, 1> translate trace(Body, <460, 66, Sd * 56>, <-1, 0, 0>)
              texture { pigment { srgb <0.85, 0.08, 0.06> } finish { ambient 0 emission 0.15 specular 0.8 roughness 0.003 } } }
   #end
   union {
@@ -301,3 +331,8 @@
   Wheel(<286, 31.5, -60>, -1)
   Wheel(<286, 31.5, 60>, 1)
 }
+#end
+
+#declare Metropolitan = Nash(1)
+// the same car as a die-cast toy, for the Photo Board's ledge
+#declare MetropolitanToy = Nash(0)

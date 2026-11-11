@@ -8,6 +8,7 @@ local web server answering as Syncthing would, and the window is built
 offscreen from the shipped scene assets.
 """
 
+import copy
 import datetime
 import http.server
 import json
@@ -265,6 +266,9 @@ class GarageWindowTests(unittest.TestCase):
                          now=D(2026, 9, 23, 14, 5, 0))
         self.win = self.garage.GarageWindow(self.settings)
         self.win.poll.stop()
+        # by day, whenever the tests run
+        self.win.sky.stop()
+        self.win.night = False
         self.win.resize(1280, 840)
         self.app.processEvents()
         self.win.replan()
@@ -371,6 +375,80 @@ class GarageWindowTests(unittest.TestCase):
         self.win._clicked("garage", "lamp")
         self.assertIn("dark-beams", self.win.garage_pic.on)
         self.assertFalse(self.win.garage_pic.composed().isNull())
+
+    def night_pictures(self):
+        """The garage's pieces with night ones, standing in with the day's
+        files where the shipped set has no night (the files are not looked at)."""
+        pic = self.win.garage_pic
+        pic.info = copy.deepcopy(pic.info)
+        pieces = pic.info["pieces"]
+        day = {k: v for k, v in pieces.items() if not k.startswith(("dark", "night"))}
+        for light in ("night", "night-dark"):
+            pieces.setdefault(light, pieces["dark"])
+            for k, v in day.items():
+                pieces.setdefault("%s-%s" % (light, k), v)
+
+    def test_night_falls_and_the_garage_fades_into_it(self):
+        self.night_pictures()
+        self.win.where = (33.4484, -112.0740)                       # Phoenix
+        mst = datetime.timezone(datetime.timedelta(hours=-7))
+        self.win.show()
+        self.app.processEvents()
+        self.win.check_sky(D(2026, 11, 10, 17, 20, tzinfo=mst))      # sunset is 5:28
+        self.assertFalse(self.win.night)
+        self.assertFalse(any(k.startswith("night") for k in self.win.garage_pic.on))
+        self.win.check_sky(D(2026, 11, 10, 17, 35, tzinfo=mst))
+        self.assertTrue(self.win.night)
+        self.assertEqual(self.win.garage_pic.on[0], "night")
+        self.assertIn("night-safelight", self.win.garage_pic.on)
+        self.assertGreater(self.win.stage.fading(self.win.garage_pic), 0.5)
+        self.assertFalse(self.win.grab().isNull())                # paints mid-fade
+        self.win.stage._fade_ms = 1
+        self.win.stage._fade_step()
+        self.assertEqual(self.win.stage.fading(self.win.garage_pic), 0)
+        # the light switched off by night, and the headlights
+        self.win._clicked("garage", "lamp")
+        self.assertEqual(self.win.garage_pic.on[0], "night-dark")
+        self.win._clicked("garage", "headlights")
+        self.assertIn("night-dark-beams", self.win.garage_pic.on)
+        self.assertFalse(self.win.garage_pic.composed().isNull())
+        # and sunrise
+        self.win._clicked("garage", "lamp")
+        self.win.check_sky(D(2026, 11, 11, 7, 0, tzinfo=mst))
+        self.assertFalse(self.win.night)
+        self.assertNotIn("night", self.win.garage_pic.on)
+        self.assertIn("beams", self.win.garage_pic.on)
+
+    def test_no_night_without_night_pictures(self):
+        pic = self.win.garage_pic
+        pic.info = copy.deepcopy(pic.info)
+        for k in [k for k in pic.info["pieces"] if k.startswith("night")]:
+            del pic.info["pieces"][k]
+        self.win.where = (33.4484, -112.0740)
+        self.assertFalse(self.win.sky_is_night(
+            D(2026, 11, 10, 23, 0, tzinfo=datetime.timezone(datetime.timedelta(hours=-7)))))
+
+    def test_the_desk_lamp_switches_off(self):
+        pic = self.win.garage_pic
+        if "desklamp" not in pic.names:
+            self.skipTest("the shipped pictures have no desk lamp to click yet")
+        hit = self.win.stage.spot_under(self.point_of(pic, "desklamp"))
+        self.assertEqual(hit[1], "desklamp")
+        self.plug_in()
+        self.assertIn("off", self.win._tip("garage", "desklamp"))
+        self.win._clicked("garage", "desklamp")
+        self.assertFalse(self.win.desk_on)
+        on = pic.on
+        self.assertLess(on.index("desk-off"), on.index("desk-off-card"))
+        self.assertNotIn("card", on)
+        self.assertIn("on", self.win._tip("garage", "desklamp"))
+        # with the light over the car off too
+        self.win._clicked("garage", "lamp")
+        self.assertEqual(pic.on[:3], ["dark", "dark-desk-off", "dark-desk-off-card"])
+        self.assertFalse(pic.composed().isNull())
+        self.win._clicked("garage", "desklamp")
+        self.assertNotIn("dark-desk-off", pic.on)
+        self.assertIn("dark-card", pic.on)
 
     def test_the_badge_knows_who_it_is(self):
         hit = self.win.stage.spot_under(self.point_of(self.win.console, "badge"))

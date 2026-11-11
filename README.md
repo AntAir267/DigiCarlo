@@ -187,8 +187,12 @@ thing:
 | The car | Honks, and looks for cameras again |
 | The calendar | Today: the date a pull's newest shot gets |
 
-The car is a 1957 Metropolitan 1500 hardtop, modelled from photographs. A
-few other things in the garage can be clicked too, just for fun.
+The car is a 1957 Metropolitan 1500 hardtop, modelled from photographs, on a
+1957 Illinois plate. A few other things in the garage can be clicked too,
+just for fun. From sunset to sunrise the window shows night, and the garage
+fades into it as the sun goes down. The times are worked out for where the
+computer is, from its time zone, or from `location` ("latitude, longitude")
+under `[window]` in the settings.
 
 ### The Photo Board
 
@@ -205,7 +209,7 @@ below. The tools on the ledge work on the picked shots:
 | Eraser | Back to automatic |
 | Wastebasket | Leaves them out of the library (they stay in the archive). With nothing picked, brings back the ones left out |
 | Red-eye pen | Takes the flash red out of their eyes. Each photo is shown with the fixes it would make: click one to drop it, or click a red eye it missed to add it |
-| GARAGE sign | Back to the garage |
+| Toy Metropolitan | Back to the garage |
 
 A quarter turn, a name and a place go into the library copies as they are
 made -- for a JPEG the turn is the EXIF orientation, so nothing is

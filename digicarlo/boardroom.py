@@ -10,7 +10,7 @@ on the ledge and the radio's keys do to them.
     wastebasket            leave them out (with nothing picked: bring back
                            the ones left out)
     red-eye pen            take the flash red out of their eyes
-    GARAGE sign            back to the garage
+    toy Metropolitan       back to the garage
     radio keys             VIEW, ROTATE, NAME, PLACE, UNDO
     knobs, wheel, PgUp/Dn  turn the pages
 

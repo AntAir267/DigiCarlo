@@ -190,27 +190,34 @@ g = Scene("garage", (W, H))
 g.background("garage.png")
 base = load("garage.png")
 # the headlights before the car, so they win where the two overlap
-gmap = g.hotspots([(1, "card"), (2, "blink"), (3, "door"), (4, "board"), (5, "crate"),
+gmap = g.hotspots([(1, "card"), (2, "blink"), (9, "desklamp"), (3, "door"), (4, "board"), (5, "crate"),
                    (8, "headlights"), (7, "lamp"), (6, "car")],
                   "garage-q.png", "garage-q-hide%d.png")
 cam = Camera((-10, 138, -150), (0, 118, 400), W, H, angle=72)
 # the card and camera with their shadows (and the reader's light), and the
 # red the safelight throws
 reader = disc((W, H), cam.project((-231, 100, 342.3)), 24)
-g.add_piece("card", *piece(load("garage-card.png"), base,
-                           grow(union(g.outlines["card"], reader), 40)))
-g.add_piece("blink", *piece(load("garage-blink.png"), base, grow(g.outlines["blink"], 40)))
+card_area = grow(union(g.outlines["card"], reader), 40)
+blink_area = grow(g.outlines["blink"], 40)
 safe = disc((W, H), cam.project((-27, 219, 392)), 230)
-g.add_piece("safelight", *piece(load("garage-safelight.png"), base, safe))
-g.add_piece("beams", *piece_changed(load("garage-beams.png"), base))
-# the same, with the light switched off
-g.add_whole("dark", "garage-dark.png")
-dark = load("garage-dark.png")
-g.add_piece("dark-card", *piece(load("garage-dark-card.png"), dark,
-                                grow(union(g.outlines["card"], reader), 40)))
-g.add_piece("dark-blink", *piece(load("garage-dark-blink.png"), dark, grow(g.outlines["blink"], 40)))
-g.add_piece("dark-safelight", *piece(load("garage-dark-safelight.png"), dark, safe))
-g.add_piece("dark-beams", *piece_changed(load("garage-dark-beams.png"), dark))
+# the same again with the light switched off ("dark"), by night ("night"),
+# and by night with the light off ("night-dark"): each a whole picture, with
+# its own pieces
+for light in ("", "dark", "night", "night-dark"):
+    name = "garage-" + light if light else "garage"
+    key = light + "-" if light else ""
+    if light:
+        g.add_whole(light, name + ".png")
+    bg = load(name + ".png")
+    g.add_piece(key + "card", *piece(load(name + "-card.png"), bg, card_area))
+    g.add_piece(key + "blink", *piece(load(name + "-blink.png"), bg, blink_area))
+    g.add_piece(key + "safelight", *piece(load(name + "-safelight.png"), bg, safe))
+    g.add_piece(key + "beams", *piece_changed(load(name + "-beams.png"), bg))
+    # the desk lamp off: where its light went, then the card and the camera
+    # as they look without it, laid over that
+    g.add_piece(key + "desk-off", *piece_changed(load(name + "-desk-off.png"), bg))
+    g.add_piece(key + "desk-off-card", *piece(load(name + "-desk-off-card.png"), bg, card_area))
+    g.add_piece(key + "desk-off-blink", *piece(load(name + "-desk-off-blink.png"), bg, blink_area))
 g.surface("card", face(cam, 13, 18, -0.9, [("rotate", (-8, 0, 0)), ("translate", (-252, 99, 352))]), (240, 320))
 g.surface("tag", face(cam, 26, 11.5, -0.2, [("rotate", (0, 0, 8)), ("rotate", (0, -12, 0)),
                                               ("translate", (-214, 88, 343))]), (360, 160))
@@ -235,7 +242,7 @@ b.add_piece("trash", *piece(load("board-trash.png"), base, grow(b.outlines["bin"
 # stamp's rubber, where it shows the date it will stamp
 BX, BT, BB = 318, 132, -86
 b.surface("cork", face(cam, 2 * BX, BT - BB, 12, [("translate", (-BX, BB, 0))]), (4 * BX, 2 * (BT - BB)))
-b.surface("stamp", face(cam, 30, 12, -8.4, [("translate", (-190 - 15, BB - 12 + 14, -30))]), (300, 120))
+b.surface("stamp", face(cam, 30, 12, -8.4, [("translate", (-166 - 15, BB - 12 + 14, -30))]), (300, 120))
 if CHECK:
     b.check("board-trash.png", bmap)
 

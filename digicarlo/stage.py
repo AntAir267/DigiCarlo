@@ -16,7 +16,8 @@ the render, so the ink sits on the paper.
 import json
 import os
 
-from PyQt6.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt, pyqtSignal
+from PyQt6.QtCore import (QElapsedTimer, QPoint, QPointF, QRect, QRectF, QSize, Qt,
+                          QTimer, pyqtSignal)
 from PyQt6.QtGui import (QColor, QFont, QImage, QPainter, QPixmap, QPolygonF,
                          QTransform)
 from PyQt6.QtWidgets import QToolTip, QWidget
@@ -183,6 +184,12 @@ class Stage(QWidget):
         self.hot = None
         self.pressed = None
         self._glows = {}
+        self._fades = {}                # picture -> (how it looked, its scaled copies)
+        self._fade_clock = QElapsedTimer()
+        self._fade_ms = 0
+        self._fade_timer = QTimer(self)
+        self._fade_timer.setInterval(16)
+        self._fade_timer.timeout.connect(self._fade_step)
         self.setMouseTracking(True)
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
         w = pictures[0].size.width()
@@ -198,6 +205,28 @@ class Stage(QWidget):
         self.pictures[i] = picture
         self.hot = self.pressed = None
         self._glows.clear()
+        self.update()
+
+    def fade(self, picture, ms=1500):
+        """Dissolve from how `picture` looks now into how it looks after
+        the caller changes it (nightfall in the garage)."""
+        if picture not in self.pictures or not self.isVisible() or ms <= 0:
+            return
+        self._fades[picture] = (picture.composed().copy(), {})
+        self._fade_ms = ms
+        self._fade_clock.start()
+        self._fade_timer.start()
+
+    def fading(self, picture):
+        """How much of the old look still shows, 1 to 0 (0: none)."""
+        if picture not in self._fades or not self._fade_ms:
+            return 0.0
+        return max(0.0, 1.0 - self._fade_clock.elapsed() / self._fade_ms)
+
+    def _fade_step(self):
+        if not self._fades or self._fade_clock.elapsed() >= self._fade_ms:
+            self._fades.clear()
+            self._fade_timer.stop()
         self.update()
 
     def refresh(self, picture=None):
@@ -267,6 +296,23 @@ class Stage(QWidget):
             pm = pic.scaled(r.size())
             pm.setDevicePixelRatio(dpr)
             p.drawPixmap(QPointF(r.x() / dpr, r.y() / dpr), pm)
+            left = self.fading(pic)
+            if left > 0:
+                # the old look over the new, thinning out (eased, so the
+                # change is quick in the middle and gentle at each end)
+                old, copies = self._fades[pic]
+                key = (r.width(), r.height())
+                if key not in copies:
+                    copies.clear()
+                    copies[key] = QPixmap.fromImage(old.scaled(
+                        r.size(), Qt.AspectRatioMode.IgnoreAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation))
+                was = copies[key]
+                was.setDevicePixelRatio(dpr)
+                p.save()
+                p.setOpacity(left * left * (3 - 2 * left))
+                p.drawPixmap(QPointF(r.x() / dpr, r.y() / dpr), was)
+                p.restore()
             if self.hot is not None and self.hot[0] is pic and self.hot[1] in pic.names:
                 self._paint_glow(p, pic, r, self.hot[1])
         p.setRenderHint(QPainter.RenderHint.Antialiasing)

@@ -29,8 +29,29 @@
    "beams": {
     "file": "garage-beams.png",
     "at": [
-     443,
+     381,
      657
+    ]
+   },
+   "desk-off": {
+    "file": "garage-desk-off.png",
+    "at": [
+     599,
+     414
+    ]
+   },
+   "desk-off-card": {
+    "file": "garage-desk-off-card.png",
+    "at": [
+     325,
+     492
+    ]
+   },
+   "desk-off-blink": {
+    "file": "garage-desk-off-blink.png",
+    "at": [
+     603,
+     511
     ]
    },
    "dark": {
@@ -64,8 +85,141 @@
    "dark-beams": {
     "file": "garage-dark-beams.png",
     "at": [
-     430,
+     268,
      166
+    ]
+   },
+   "dark-desk-off": {
+    "file": "garage-dark-desk-off.png",
+    "at": [
+     289,
+     231
+    ]
+   },
+   "dark-desk-off-card": {
+    "file": "garage-dark-desk-off-card.png",
+    "at": [
+     325,
+     492
+    ]
+   },
+   "dark-desk-off-blink": {
+    "file": "garage-dark-desk-off-blink.png",
+    "at": [
+     603,
+     511
+    ]
+   },
+   "night": {
+    "file": "garage-night.jpg",
+    "at": [
+     0,
+     0
+    ]
+   },
+   "night-card": {
+    "file": "garage-night-card.png",
+    "at": [
+     325,
+     492
+    ]
+   },
+   "night-blink": {
+    "file": "garage-night-blink.png",
+    "at": [
+     603,
+     511
+    ]
+   },
+   "night-safelight": {
+    "file": "garage-night-safelight.png",
+    "at": [
+     936,
+     0
+    ]
+   },
+   "night-beams": {
+    "file": "garage-night-beams.png",
+    "at": [
+     280,
+     657
+    ]
+   },
+   "night-desk-off": {
+    "file": "garage-night-desk-off.png",
+    "at": [
+     568,
+     414
+    ]
+   },
+   "night-desk-off-card": {
+    "file": "garage-night-desk-off-card.png",
+    "at": [
+     325,
+     492
+    ]
+   },
+   "night-desk-off-blink": {
+    "file": "garage-night-desk-off-blink.png",
+    "at": [
+     603,
+     511
+    ]
+   },
+   "night-dark": {
+    "file": "garage-night-dark.jpg",
+    "at": [
+     0,
+     0
+    ]
+   },
+   "night-dark-card": {
+    "file": "garage-night-dark-card.png",
+    "at": [
+     325,
+     492
+    ]
+   },
+   "night-dark-blink": {
+    "file": "garage-night-dark-blink.png",
+    "at": [
+     603,
+     511
+    ]
+   },
+   "night-dark-safelight": {
+    "file": "garage-night-dark-safelight.png",
+    "at": [
+     936,
+     0
+    ]
+   },
+   "night-dark-beams": {
+    "file": "garage-night-dark-beams.png",
+    "at": [
+     260,
+     166
+    ]
+   },
+   "night-dark-desk-off": {
+    "file": "garage-night-dark-desk-off.png",
+    "at": [
+     0,
+     50
+    ]
+   },
+   "night-dark-desk-off-card": {
+    "file": "garage-night-dark-desk-off-card.png",
+    "at": [
+     325,
+     492
+    ]
+   },
+   "night-dark-desk-off-blink": {
+    "file": "garage-night-dark-desk-off-blink.png",
+    "at": [
+     603,
+     511
     ]
    }
   },
@@ -86,6 +240,14 @@
      538
     ]
    },
+   "9": {
+    "name": "desklamp",
+    "glow": "garage-glow-desklamp.png",
+    "at": [
+     697,
+     419
+    ]
+   },
    "3": {
     "name": "door",
     "glow": "garage-glow-door.png",
@@ -98,7 +260,7 @@
     "name": "board",
     "glow": "garage-glow-board.png",
     "at": [
-     1379,
+     1358,
      145
     ]
    },
@@ -106,8 +268,8 @@
     "name": "crate",
     "glow": "garage-glow-crate.png",
     "at": [
-     202,
-     786
+     285,
+     715
     ]
    },
    "8": {
@@ -255,7 +417,7 @@
     "name": "stamp",
     "glow": "board-glow-stamp.png",
     "at": [
-     385,
+     481,
      681
     ]
    },
@@ -295,8 +457,8 @@
     "name": "garage",
     "glow": "board-glow-garage.png",
     "at": [
-     80,
-     673
+     40,
+     767
     ]
    }
   },
@@ -328,19 +490,19 @@
    "stamp": {
     "corners": [
      [
-      480.9,
+      573.5,
       813.2
      ],
      [
-      596.6,
+      689.3,
       813.2
      ],
      [
-      596.9,
+      689.5,
       859.4
      ],
      [
-      481.1,
+      573.7,
       859.4
      ]
     ],

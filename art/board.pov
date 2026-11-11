@@ -1,7 +1,7 @@
 // DigiCarlo - walking up to the Photo Board.
 // The board is empty here: the snapshots and session cards are pinned on by
-// the program. The ledge carries the dating tools, the red-eye pen, and the
-// sign back to the garage.
+// the program. The ledge carries the dating tools, the red-eye pen, and a toy
+// Metropolitan that goes back to the garage.
 
 #version 3.7;
 // What render.sh switches, to cut the pieces the program swaps in:
@@ -45,7 +45,7 @@ light_source { <300, 200, -700> srgb <0.85, 0.9, 1.0>*0.3 shadowless }
 #declare T_Chrome = texture { pigment { srgb <0.90, 0.92, 0.95> }
                               finish { ambient 0 diffuse 0.06 specular 0.9 roughness 0.002 brilliance 3 metallic reflection { 0.75 metallic } } }
 #declare T_Brass  = texture { pigment { srgb <0.85, 0.66, 0.28> } finish { ambient 0 diffuse 0.3 specular 0.8 roughness 0.005 metallic reflection { 0.35 metallic } } }
-#declare T_Black  = texture { pigment { srgb <0.10, 0.10, 0.12> } finish { ambient 0 diffuse 0.6 specular 0.5 roughness 0.01 } }
+#declare T_Black = texture { pigment { srgb <0.10, 0.10, 0.12> } finish { ambient 0 diffuse 0.6 specular 0.5 roughness 0.01 } }
 
 sky_sphere { pigment { gradient y color_map { [0 srgb <0.2, 0.15, 0.1>] [0.55 srgb <0.6, 0.48, 0.36>] [1 srgb <0.9, 0.85, 0.78>] } } }
 
@@ -98,120 +98,22 @@ object { Ban translate -<(Mn.x + Mx.x)/2, (Mn.y + Mx.y)/2, 0>
          matrix <1, 0, 0, 0.22, 1, 0, 0, 0, 1, 0, 0, 0>
          scale 22 translate <0, BT - 19, 8.6> texture { T_Blue } }
 
-// the ledge
-box { <-BX - 40, BB - 26, -64>, <BX + 40, BB - 12, 12> T_Plank(S, <0.86, 0.60, 0.36>, y*90) }
-box { <-BX - 40, BB - 46, -66>, <BX + 40, BB - 26, -58> T_Plank(S, <0.72, 0.47, 0.27>, y*90) }
+// the ledge, and the tools on it (ledge.inc, shared with the garage)
+#declare HotLights = -1;          // the toy car's lamps are not a hotspot of their own
+#include "metropolitan.inc"
+#include "ledge.inc"
 #declare LY = BB - 12;     // ledge top
+object { LedgeShelf translate y*LY }
 
-// a date stamp; the program shows on its face the date it will stamp
-union {
-  union {
-    box { <-22, 0, -12>, <22, 10, 12> texture { T_Black } }
-    box { <-18, 10, -8>, <18, 34, 8> texture { T_Black } }
-    box { <-15, 14, -8.4>, <15, 26, -8> texture { pigment { srgb <0.14, 0.14, 0.16> } finish { ambient 0 diffuse 0.6 specular 0.3 roughness 0.02 } } }
-    cylinder { <0, 34, 0>, <0, 44, 0>, 5 T_Plank(S, <0.55, 0.33, 0.17>, x*90) }
-    sphere { <0, 52, 0>, 12 scale <1, 0.8, 1> T_Plank(S, <0.60, 0.35, 0.18>, x*90) }
-    translate <-190, LY, -30>
-  }
-  box { <0, 0, -0.2>, <46, 12, 0.2> texture { Img("tex/t_stamp.png", 46, 12) } rotate z*-2 translate <-213, BB - 40, -67> }
-  Hot(HotStamp)
-}
-
-// an alarm clock: the camera's own clock
-union {
-union {
-  cylinder { <0, 0, -6>, <0, 0, 6>, 26 texture { pigment { srgb <0.78, 0.76, 0.90> } finish { ambient 0 diffuse 0.6 specular 0.7 roughness 0.006 reflection 0.05 } } }
-  cylinder { <0, 0, -6.5>, <0, 0, -6.2>, 21 texture { pigment { srgb <0.98, 0.97, 0.94> } finish { ambient 0 diffuse 0.8 } } }
-  #for (H, 0, 11)
-    box { <-0.8, 17, -7>, <0.8, 20, -6.5> rotate z*H*30 texture { T_Black } }
-  #end
-  box { <-1.2, 0, -7.5>, <1.2, 12, -7> rotate z*-60 texture { T_Black } }
-  box { <-1, 0, -7.5>, <1, 17, -7> rotate z*25 texture { T_Black } }
-  sphere { <-19, 22, 0>, 9 scale <1, 0.75, 1> texture { T_Brass } }
-  sphere { <19, 22, 0>, 9 scale <1, 0.75, 1> texture { T_Brass } }
-  cylinder { <-14, -20, 0>, <-20, -27, 0>, 2 texture { T_Brass } }
-  cylinder { <14, -20, 0>, <20, -27, 0>, 2 texture { T_Brass } }
-  torus { 21.5, 1.6 rotate x*90 translate <0, 0, -6.5> texture { T_Chrome } }
-  translate <-60, LY + 27, -30>
-}
-box { <0, 0, -0.2>, <50, 12, 0.2> texture { Img("tex/t_clock.png", 50, 12) } rotate z*1.5 translate <-85, BB - 40, -67> }
-Hot(HotClock)
-}
-
-// an eraser: back to automatic
-union {
-union {
-  superellipsoid { <0.2, 0.2> scale <18, 8, 9> translate <-10, 0, 0> texture { pigment { srgb <1.0, 0.63, 0.70> } finish { ambient 0 diffuse 0.8 specular 0.2 roughness 0.05 } } }
-  superellipsoid { <0.2, 0.2> scale <12, 8, 9> translate <18, 0, 0> texture { pigment { srgb <0.45, 0.68, 0.92> } finish { ambient 0 diffuse 0.8 specular 0.2 roughness 0.05 } } }
-  rotate z*8 rotate y*-15 translate <62, LY + 9, -32>
-}
-box { <0, 0, -0.2>, <44, 12, 0.2> texture { Img("tex/t_eraser.png", 44, 12) } rotate z*-1 translate <42, BB - 40, -67> }
-Hot(HotEraser)
-}
-
-// a wastebasket: leave out. Crumpled prints in it while any are left out.
-union {
-difference {
-  cone { <0, 0, 0>, 17, <0, 46, 0>, 22 }
-  cone { <0, 2, 0>, 15.5, <0, 47, 0>, 20.5 }
-  #for (A, 0, 350, 20)
-    box { <-1.2, 8, -30>, <1.2, 38, 0> rotate y*A }
-  #end
-  texture { pigment { srgb <0.62, 0.66, 0.70> } finish { ambient 0 diffuse 0.4 specular 0.8 roughness 0.006 metallic reflection 0.25 } }
-  translate <185, LY, -30>
-}
-torus { 22, 1.6 translate <185, LY + 46, -30> texture { T_Chrome } }
-box { <0, 0, -0.2>, <44, 12, 0.2> texture { Img("tex/t_bin.png", 44, 12) } rotate z*2 translate <163, BB - 40, -67> }
-#if (Trash)
-  #declare T_Crumpled = texture {
-    pigment { bozo turbulence 0.6 color_map { [0 srgb <0.97, 0.96, 0.92>] [0.55 srgb <0.94, 0.93, 0.88>]
-                                              [0.7 srgb <0.62, 0.80, 0.94>] [0.85 srgb <0.45, 0.72, 0.36>] [1 srgb <0.97, 0.96, 0.92>] } scale 4 }
-    normal { crackle 1.4 scale 3.5 }
-    finish { ambient 0 diffuse 0.8 specular 0.15 roughness 0.04 } }
-  sphere { 0, 10 scale <1, 0.85, 0.95> texture { T_Crumpled } rotate <20, 40, 10> translate <178, LY + 43, -28> }
-  sphere { 0, 9 scale <1, 0.9, 1> texture { T_Crumpled translate 7 } rotate <-10, 70, 30> translate <193, LY + 45, -33> }
-  sphere { 0, 8 scale <0.95, 0.85, 1> texture { T_Crumpled translate 13 } rotate <40, 10, -20> translate <186, LY + 47, -20> }
+// paper tags pinned along the ledge's front, handwritten
+#macro Tag(File, X, W, Tilt)
+  box { <0, 0, -0.2>, <W, 12, 0.2> texture { Img(File, W, 12) } rotate z*Tilt translate <X, BB - 40, -67> }
 #end
-Hot(HotBin)
-}
 
-// the red-eye pen: a felt pen for dabbing red eyes on prints, 1990s style,
-// lying on the ledge with its cap off beside it
-union {
-  union {
-    cylinder { <-30, 0, 0>, <18, 0, 0>, 4.6 texture { pigment { srgb 0.07 } finish { ambient 0 diffuse 0.5 specular 0.8 roughness 0.004 reflection 0.06 } } }
-    cylinder { <-14, 0, 0>, <8, 0, 0>, 4.7 texture { pigment { srgb <0.97, 0.96, 0.92> } finish { ambient 0 diffuse 0.8 specular 0.3 } } }
-    cylinder { <-11, 0, 0>, <5, 0, 0>, 4.75 texture { T_Red } }
-    sphere { <18, 0, 0>, 4.6 scale <0.5, 1, 1> translate <9, 0, 0> texture { pigment { srgb 0.07 } finish { ambient 0 diffuse 0.5 specular 0.8 roughness 0.004 } } }
-    cone { <-30, 0, 0>, 4.6, <-38, 0, 0>, 1.8 texture { pigment { srgb 0.07 } finish { ambient 0 diffuse 0.5 specular 0.8 roughness 0.004 } } }
-    cone { <-38, 0, 0>, 1.8, <-43, 0, 0>, 0.7 texture { pigment { srgb <0.35, 0.05, 0.06> } finish { ambient 0 diffuse 0.9 } } }
-    rotate y*28 translate <262, LY + 4.6, -40>
-  }
-  union {
-    cylinder { <0, 0, 0>, <17, 0, 0>, 5.2 texture { T_Red } }
-    sphere { <17, 0, 0>, 5.2 scale <0.45, 1, 1> translate <9.35, 0, 0> texture { T_Red } }
-    box { <2, 4.6, -1.1>, <18, 6.4, 1.1> texture { T_Chrome } }
-    rotate x*90 rotate y*-12 translate <300, LY + 5.2, -34>
-  }
-  box { <0, 0, -0.2>, <44, 12, 0.2> texture { Img("tex/t_pen.png", 44, 12) } rotate z*-1.5 translate <258, BB - 40, -67> }
-  Hot(HotPen)
-}
-
-// the way back to the garage: a painted arrow on a stake
-#declare SignX = -270; #declare SignY = LY + 38;
-union {
-  cylinder { <SignX + 8, LY, -30>, <SignX + 8, SignY, -30>, 2.2 T_Plank(S, <0.55, 0.33, 0.17>, x*90) }
-  box { <SignX - 2, LY, -36>, <SignX + 18, LY + 3, -24> T_Plank(S, <0.55, 0.33, 0.17>, y*90) }
-  prism {
-    linear_sweep linear_spline -1.4, 1.4, 8,
-    <-40, 0>, <-21, 16>, <-21, 8>, <34, 8>, <34, -8>, <-21, -8>, <-21, -16>, <-40, 0>
-    rotate x*-90
-    texture { T_Red }
-    translate <SignX + 4, SignY, -33>
-  }
-  #declare Gt = text { ttf FontCooper "GARAGE" 0.2, 0 }
-  object { Gt translate -<(min_extent(Gt).x + max_extent(Gt).x)/2, (min_extent(Gt).y + max_extent(Gt).y)/2, 0>
-           scale <8, 9.5, 1> translate <SignX + 10, SignY, -34.6>
-           texture { pigment { srgb <0.98, 0.96, 0.9> } finish { ambient 0 diffuse 0.8 specular 0.2 } } }
-  Hot(HotGarage)
-}
+union { object { LedgeStamp translate y*LY } Tag("tex/t_stamp.png", -189, 46, -2) Hot(HotStamp) }
+union { object { LedgeClock translate y*LY } Tag("tex/t_clock.png", -85, 50, 1.5) Hot(HotClock) }
+union { object { LedgeEraser translate y*LY } Tag("tex/t_eraser.png", 42, 44, -1) Hot(HotEraser) }
+union { object { LedgeBin translate y*LY } Tag("tex/t_bin.png", 163, 44, 2) Hot(HotBin) }
+union { object { LedgePen translate y*LY } Tag("tex/t_pen.png", 258, 44, -1.5) Hot(HotPen) }
+// the way back to the garage: a toy of the car out there
+union { object { LedgeToy translate y*LY } Tag("tex/t_garage.png", -298, 50, 1) Hot(HotGarage) }

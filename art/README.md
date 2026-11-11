@@ -8,23 +8,35 @@ date on the calendar and the date stamp, the card's name and how many pictures
 on it are new, and the shots pinned to the board.
 
 ```bash
-art/render.sh          # everything, full quality: about an hour on 24 threads
+art/render.sh          # everything, full quality: a couple of hours
 art/render.sh quick    # no bounced light or soft shadows, for checking layout
 art/render.sh check    # full quality, plus out/check-*.png to look over
+art/render.sh check garage board   # only the scenes named; out/ keeps the rest
+art/try.sh [board] [garage] [toy]  # a few test frames, to look at a change first
 ```
 
 It needs `povray` (3.7) and `python3` with Pillow and numpy. The renders go to
-`out/` and the textures to `tex/`, neither committed; what the program ships
-goes to `../digicarlo/scenes/`, which is.
+`out/` (the test frames to `out/try/`) and the textures to `tex/`, neither
+committed; what the program ships goes to `../digicarlo/scenes/`, which is.
+
+The rendering, test frames included, is done on the T7 Linux worker rather
+than on the laptop: through `~/DevWork/Games/tools/t7 run DigiCarlo`, with
+`--back` for what to bring home (`art/out/try`, or `digicarlo/scenes` and the
+`check-*.png`). The T7 keeps its own `out/` between runs, so naming scenes
+works there too.
 
 ## How the pieces fit
 
 The program swaps things in and out of the pictures -- a card in the reader,
 the SiPix on the bench, the safelight on, prints in the wastebasket, a radio
 key pushed in, the board's stations on the dial, START lit, each digit of the
-counter; and, for fun, the car's headlights, and the whole garage with its
-light switched off (a second set of the same pieces, lit only by the window,
-the desk lamp and the safelight). Each is a full render of the scene in that state,
+counter; and, for fun, the car's headlights and the desk lamp switched off
+(which comes with the card and the camera again, as they look without its
+light). The garage comes in four
+lights, each a whole picture with its own set of those pieces: by day, by day
+with its light switched off (lit only by the window, the desk lamp and the
+safelight), by night (stars in the window, moonlight for the sun), and by
+night with the light off. Each is a full render of the scene in that state,
 and `assets.py` keeps only what differs from the background, feathered at the
 edge. For that to leave no seam, every render of a scene has to light it
 exactly alike, so:
@@ -46,10 +58,12 @@ their corners through the scene's own camera.
 
 | File | What it is |
 | --- | --- |
-| `garage.pov` | The garage: Pick-Up Bench, darkroom door, Photo Board, the Metropolitan. `Card`, `Blink`, `Safe` switch the card, the SiPix and the safelight; `Lamp` the light over the car, `Beams` the headlights |
-| `metropolitan.inc` | A 1956-58 Nash Metropolitan 1500 hardtop at real size, after photographs: its body a distance field of rounded shapes blended together, the two-tone split by the stainless spear's Z |
-| `car_test.pov` | The car on its own, from the front, side or front quarter (`View`), for checking it against photographs |
-| `board.pov` | Walking up to the Photo Board, empty. On its ledge: the date stamp, the alarm clock (the camera's date), the eraser (automatic), the wastebasket (`Trash` fills it), the red-eye pen, and the sign back to the garage |
+| `garage.pov` | The garage: Pick-Up Bench, darkroom door, Photo Board (with its ledge, shrunk), the Metropolitan. `Card`, `Blink`, `Safe` switch the card, the SiPix and the safelight; `Lamp` the light over the car, `Desk` the desk lamp on the bench, `Beams` the headlights, `Night` the night outside |
+| `metropolitan.inc` | A 1956-58 Nash Metropolitan 1500 hardtop at real size, after photographs: its body a distance field of rounded shapes blended together, the two-tone split by the stainless spear's Z; its Illinois 1957 plate (white on red) says CARLO. Also the same car as a die-cast toy, with its own windows |
+| `car_test.pov` | The car on its own, from the front, side or front quarter (`View`), for checking it against photographs; `Toy` for the toy, `View=3` as the board sees it |
+| `board.pov` | Walking up to the Photo Board, empty, with its ledge and their paper tags |
+| `ledge.inc` | The Photo Board's ledge and what is on it, for both scenes: the date stamp, the alarm clock (the camera's date), the eraser (automatic), the wastebasket (`Trash` fills it), the red-eye pen, and a toy Metropolitan, the way back to the garage |
+| `try.sh` | Test frames, to look at a change before the full render |
 | `console.pov` | The console. `Mode` 0 is the garage's, 1 the board's; `Lit` is the radio key pushed in, `Go` START's lamp (2 for STOP), `Digit` what the counter shows |
 | `clockicon.pov` | The alarm clock for the trust-the-camera's-clock dialog |
 | `pin.pov` | A map pin, in five colours, for pinning shots to the board |

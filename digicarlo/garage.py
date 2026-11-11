@@ -12,8 +12,8 @@ Everything in the room that can be clicked does one thing:
     the car                   honk, and look for cameras again
 
 and a few things that do nothing useful at all: the light over the car
-switches off (and on), and so do the car's headlights; the chrome script on
-the console knows who it is.
+switches off (and on), and so do the desk lamp on the bench and the car's
+headlights; the chrome script on the console knows who it is.
 
 and the console holds what has no place in the room:
 
@@ -25,7 +25,9 @@ and the console holds what has no place in the room:
     START           put them in the library (STOP while a job runs)
 
 The calendar on the wall shows today, which is the date a pull's newest shot
-gets; the safelight over the darkroom is on while anything is waiting.
+gets; the safelight over the darkroom is on while anything is waiting. From
+sunset to sunrise (worked out for where the computer is) the window shows
+night, and the garage fades into it as the sun goes down.
 """
 
 import copy
@@ -46,7 +48,7 @@ from PyQt6.QtWidgets import (QApplication, QDialog, QFileDialog, QHBoxLayout,
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from digicarlo import (__version__, archive, blinky, cardtools, config,  # noqa: E402
-                       develop, edits, sources, syncthing, timeplan, update)
+                       develop, edits, sources, sun, syncthing, timeplan, update)
 from digicarlo import cartoon as toon                                   # noqa: E402
 from digicarlo import win95                                             # noqa: E402
 from digicarlo.boardroom import BoardRoom                               # noqa: E402
@@ -128,6 +130,8 @@ class GarageWindow(win95.Window):
         self.room = "garage"            # or "board"
         self.lamp_on = True             # the light over the car
         self.beams = False              # the car's headlights
+        self.desk_on = True             # the desk lamp on the bench
+        self.night = False              # the sun down, outside the window
         self.board_key = 0              # a board key, while it is held down
         self.trust_next = None          # (batch id, camera) to ask about
         self.board = edits.Board(os.path.join(os.path.dirname(self.settings.path),
@@ -161,6 +165,14 @@ class GarageWindow(win95.Window):
         self.poll.setInterval(2500)
         self.poll.timeout.connect(self._poll_devices)
         self.poll.start()
+        # day or night outside: looked at often enough to catch the sunset
+        # within half a minute, and after the computer wakes up
+        self.where = self.settings.location
+        self.night = self.sky_is_night()
+        self.sky = QTimer(self)
+        self.sky.setInterval(30000)
+        self.sky.timeout.connect(self.check_sky)
+        self.sky.start()
         self.later(0, self.startup)
 
     def _fit_to_screen(self):
@@ -306,8 +318,16 @@ class GarageWindow(win95.Window):
                                 ("blink", bool(self.cameras())),
                                 ("safelight", n > 0),
                                 ("beams", self.beams)) if on]
-        if not self.lamp_on:
-            room = ["dark"] + ["dark-" + k for k in room]
+        if not self.desk_on:
+            # its light gone, then the card and camera as they look without it
+            room = ["desk-off"] + ["desk-off-" + k if k in ("card", "blink") else k
+                                   for k in room]
+        # the light it is all seen in: "", "dark", "night" or "night-dark",
+        # each a whole picture with its own pieces
+        light = "-".join(w for w, on in (("night", self.night),
+                                         ("dark", not self.lamp_on)) if on)
+        if light:
+            room = [light] + ["%s-%s" % (light, k) for k in room]
         self.garage_pic.set_pieces(room)
         self.garage_pic.invalidate()          # the tag, sticky and calendar change
         self.boardroom.pic.set_pieces(["trash"] if self.arc.skipped else [])
@@ -435,7 +455,8 @@ class GarageWindow(win95.Window):
 
         r = on("calendar")
         # white lettering is painted, not inked, so it has to dim itself
-        p.setPen(QColor(255, 250, 240) if self.lamp_on else QColor(112, 100, 92))
+        p.setPen(QColor(255, 250, 240) if self.lamp_on
+                 else QColor(34, 33, 38) if self.night else QColor(112, 100, 92))
         fit(p, PRINTED, today.strftime("%B").upper(), QRectF(0, 0, 360, 120), 52)
         p.drawText(QRectF(0, 0, 400, 120), Qt.AlignmentFlag.AlignCenter,
                    today.strftime("%B").upper())
@@ -543,6 +564,7 @@ class GarageWindow(win95.Window):
                     "crate": "Originals: open the archive folder",
                     "car": "Honk: look for cameras again",
                     "lamp": "The light: switch it %s" % ("off" if self.lamp_on else "on"),
+                    "desklamp": "The desk lamp: switch it %s" % ("off" if self.desk_on else "on"),
                     "headlights": "Headlights: %s" % ("off" if self.beams else "on")
                     }.get(spot, "")
         return {"key1": "Check card: read every file, to see the card is sound",
@@ -572,6 +594,7 @@ class GarageWindow(win95.Window):
              "crate": lambda: self._open(self.settings.archive),
              "car": self.honk,
              "lamp": self.flip_lamp,
+             "desklamp": self.flip_desk_lamp,
              "headlights": self.flip_headlights}[spot]()
             return
         if spot.startswith("key"):
@@ -653,6 +676,25 @@ class GarageWindow(win95.Window):
             self.later(1500, self.rescan)
         self.signature = sig
 
+    # -- day and night ---------------------------------------------------------------
+
+    def sky_is_night(self, when=None):
+        """Whether the sun is down where the computer is (and the garage
+        was rendered by night: an older set of pictures has only day)."""
+        if "night" not in self.garage_pic.info["pieces"]:
+            return False
+        when = when or datetime.datetime.now().astimezone()
+        return sun.is_night(when, *self.where)
+
+    def check_sky(self, when=None):
+        """At sunset or sunrise, fade the garage into the other light."""
+        night = self.sky_is_night(when)
+        if night != self.night:
+            if self.room == "garage":
+                self.stage.fade(self.garage_pic)
+            self.night = night
+            self.show_state()
+
     # -- for fun ---------------------------------------------------------------------
 
     def flip_lamp(self):
@@ -661,6 +703,12 @@ class GarageWindow(win95.Window):
             toon.play("click")
         self.say("Lights on." if self.lamp_on else "Lights out.",
                  "" if self.lamp_on else "The darkroom is always this dark.")
+        self.show_state()
+
+    def flip_desk_lamp(self):
+        self.desk_on = not self.desk_on
+        if self.settings.sounds:
+            toon.play("click")
         self.show_state()
 
     def flip_headlights(self):

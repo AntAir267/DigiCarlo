@@ -13,12 +13,14 @@
 #ifndef (Safe) #declare Safe = 1; #end        // the darkroom's safelight on
 #ifndef (Lamp) #declare Lamp = 1; #end        // the light over the car on (0: the garage in the dark)
 #ifndef (Beams) #declare Beams = 0; #end      // the car's headlights on
+#ifndef (Night) #declare Night = 0; #end      // night outside: stars, and the moon for the sun
+#ifndef (Desk) #declare Desk = 1; #end        // the desk lamp on the bench on
 #ifndef (Hide) #declare Hide = 0; #end        // leave out one clickable thing, to find its outline
 
 // Clickable things, numbered for Hide; the program's hotspots follow these.
 #declare HotCard = 1; #declare HotBlink = 2; #declare HotDoor = 3;
 #declare HotBoard = 4; #declare HotCrate = 5; #declare HotCar = 6;
-#declare HotLamp = 7; #declare HotLights = 8;
+#declare HotLamp = 7; #declare HotLights = 8; #declare HotDesk = 9;
 #macro Hot(N) #if (Hide = N) no_image #end #end
 
 global_settings {
@@ -95,8 +97,19 @@ camera {
 #declare S = seed(21);
 
 // ---------------------------------------------------------------------------
-// Lights: the pendant lamp, daylight through the window, the safelight
+// Lights: the pendant lamp, daylight (or moonlight) through the window, the
+// safelight
 // ---------------------------------------------------------------------------
+
+// the sun, or at night the moon, from the same way: over the hills beyond the
+// back wall, falling in through the window
+#macro SkyLight()
+  light_source {
+    <-900, 900, 1500>
+    #if (Night) srgb <0.62, 0.72, 1.0>*0.5 #else srgb <1.0, 0.95, 0.85>*1.6 #end
+    parallel point_at <-190, 0, 330>
+  }
+#end
 
 #if (Lamp)
 light_source {
@@ -106,13 +119,24 @@ light_source {
 }
 light_source { <220, 230, 120> srgb <1.0, 0.9, 0.75>*0.55 fade_distance 220 fade_power 1.2 }
 #end
-// fill from the open side of the room; dimmer with the light off
-light_source { <-30, 170, -140> srgb <0.9, 0.93, 1.0>*(Lamp ? 0.42 : 0.12) shadowless }
-light_source {
-  <-900, 900, 1500> srgb <1.0, 0.95, 0.85>*1.6 parallel point_at <-190, 0, 330>
-}
+// fill from the open side of the room; dimmer with the light off, and
+// dimmer again at night
+#declare Fill = (Night ? (Lamp ? 0.12 : 0.07) : (Lamp ? 0.42 : 0.12));
+light_source { <-30, 170, -140> srgb <0.9, 0.93, 1.0>*Fill shadowless }
+SkyLight()
 #if (Safe) light_source { <-27, 212, 388> srgb <1.0, 0.16, 0.08>*1.2 fade_distance 38 fade_power 2 } #end
 
+#if (Night)
+// a clear night: deep blue going black overhead, a few thin clouds, stars
+sky_sphere {
+  pigment { gradient y color_map { [0.0 srgb <0.13, 0.17, 0.33>] [0.25 srgb <0.05, 0.07, 0.17>] [1.0 srgb <0.01, 0.015, 0.05>] } }
+  pigment {
+    bozo turbulence 0.55 octaves 6 omega 0.55 lambda 2.2
+    color_map { [0.00 rgbt <0.2, 0.22, 0.3, 1>] [0.6 rgbt <0.2, 0.22, 0.3, 1>] [1.00 rgbt <0.2, 0.22, 0.3, 0.6>] }
+    scale <0.22, 0.07, 0.22> translate <0.3, 0.05, 0>
+  }
+}
+#else
 // The sky Windows 95 started with: blue, and fat white clouds.
 sky_sphere {
   pigment { gradient y color_map { [0.0 srgb <0.62, 0.80, 0.97>] [0.35 srgb <0.30, 0.55, 0.92>] [1.0 srgb <0.16, 0.38, 0.84>] } }
@@ -122,9 +146,10 @@ sky_sphere {
     scale <0.22, 0.07, 0.22> translate <0.3, 0.05, 0>
   }
 }
+#end
 
-// outside: lawn, a hedge and a tree, lit by the sun alone (so the car's
-// headlights, shining at the window, do not light the hills)
+// outside: lawn, a hedge and a tree, lit by the sun (or moon) alone, so the
+// car's headlights, shining at the window, do not light the hills
 light_group {
   plane { y, -0.5 texture { pigment { srgb <0.36, 0.66, 0.26> } finish { ambient 0 diffuse 0.8 } } }
   union {
@@ -141,7 +166,18 @@ light_group {
     #end
   }
 
-  light_source { <-900, 900, 1500> srgb <1.0, 0.95, 0.85>*1.6 parallel point_at <-190, 0, 330> }
+  #if (Night)
+    // stars, far off past the hills, where the window looks (their own seed,
+    // so the room's wood grain stays as it was)
+    #local St = seed(57);
+    #for (I, 0, 260)
+      #local P = <-4200 + rand(St)*4600, 200 + pow(rand(St), 0.8)*1700, 6000>;
+      sphere { P, 3 + 4*pow(rand(St), 3)
+               texture { pigment { srgb <0.9 + 0.1*rand(St), 0.92, 1> } finish { ambient 0 diffuse 0 emission 0.6 + 0.6*rand(St) } }
+               no_shadow no_radiosity }
+    #end
+  #end
+  SkyLight()
   global_lights off
 }
 
@@ -219,7 +255,7 @@ union {
 }
 light_group {
   box { <-285, 112, 398.5>, <-118, 232, 399> texture { pigment { srgbf <0.9, 0.95, 1.0, 0.92> } finish { ambient 0 diffuse 0 specular 0.8 roughness 0.001 reflection 0.025 } } }
-  light_source { <-900, 900, 1500> srgb <1.0, 0.95, 0.85>*1.6 parallel point_at <-190, 0, 330> }
+  SkyLight()
   global_lights off
 }
 
@@ -277,19 +313,25 @@ union {
 }
 #end
 
-// a desk lamp at the end of the bench
+// a desk lamp at the end of the bench, which can be switched off too
 union {
-  cylinder { <0, 0, 0>, <0, 2.5, 0>, 9 }
-  cylinder { <0, 2, 0>, <-10, 40, 4>, 1.3 }
-  cylinder { <-10, 40, 4>, <-28, 52, -2>, 1.3 }
-  cone { <-28, 52, -2>, 3, <-36, 42, -6>, 11 open }
-  texture { pigment { srgb <0.17, 0.43, 0.62> } finish { ambient 0 diffuse 0.6 specular 0.6 roughness 0.008 } }
-  translate <-118, 92, 380>
+  union {
+    cylinder { <0, 0, 0>, <0, 2.5, 0>, 9 }
+    cylinder { <0, 2, 0>, <-10, 40, 4>, 1.3 }
+    cylinder { <-10, 40, 4>, <-28, 52, -2>, 1.3 }
+    cone { <-28, 52, -2>, 3, <-36, 42, -6>, 11 open }
+    texture { pigment { srgb <0.17, 0.43, 0.62> } finish { ambient 0 diffuse 0.6 specular 0.6 roughness 0.008 } }
+    translate <-118, 92, 380>
+  }
+  sphere { <-152, 136, 375>, 3.5
+           texture { #if (Desk) pigment { srgb <1, 0.95, 0.75> } finish { ambient 0 emission 1 }
+                     #else pigment { srgbf <0.9, 0.9, 0.85, 0.4> } finish { ambient 0 emission 0.03 diffuse 0.3 specular 0.9 roughness 0.002 reflection 0.1 } #end }
+           no_shadow }
+  Hot(HotDesk)
 }
-sphere { <-152, 136, 375>, 3.5 texture { pigment { srgb <1, 0.95, 0.75> } finish { ambient 0 emission 1 } } no_shadow }
-light_source { <-152, 132, 373> srgb <1, 0.9, 0.7>*0.5 fade_distance 40 fade_power 2 }
+#if (Desk) light_source { <-152, 132, 373> srgb <1, 0.9, 0.7>*0.5 fade_distance 40 fade_power 2 } #end
 
-// the crate of originals
+// the crate of originals, on the bench's lower shelf
 union {
   difference {
     box { <0, 0, 0>, <62, 34, 40> }
@@ -306,7 +348,7 @@ union {
     box { <6 + I*13, 4, 8>, <17 + I*13, 46 - I*2, 32>
           texture { pigment { srgb Albums[I] } finish { ambient 0 diffuse 0.7 specular 0.3 } } }
   #end
-  translate <-262, 0, 290>
+  translate <-262, 22, 330>
   Hot(HotCrate)
 }
 
@@ -321,7 +363,8 @@ union {
     box { <-77, 206, 396>, <23, 214, 401> }
     T_Plank(S, <0.88, 0.66, 0.43>, y*90)
   }
-  box { <-69, 0, 402>, <15, 205, 405> texture { T_DoorPaint } }
+  // the door fills its opening, so no daylight shows round it
+  box { <-70, 0, 402>, <16, 206, 409> texture { T_DoorPaint } }
   box { <-60, 18, 401.2>, <6, 88, 402.2> texture { T_DoorPaint } }
   box { <-60, 104, 401.2>, <6, 132, 402.2> texture { T_DoorPaint } }
   box { <-58, 150, 400.6>, <4, 166, 402> texture { T_Red } }
@@ -343,6 +386,9 @@ torus { 7.2, 0.5 translate <-27, 219, 392> texture { T_DarkPlastic } }
 // ---------------------------------------------------------------------------
 // The Photo Board
 // ---------------------------------------------------------------------------
+
+#include "metropolitan.inc"     // the car (below), and its toy on the board's ledge
+#include "ledge.inc"
 
 #declare BX0 = 44; #declare BX1 = 220; #declare BY0 = 106; #declare BY1 = 230;
 union {
@@ -387,6 +433,13 @@ text {
 // a sticky note: the program writes on it how many shots are waiting
 box { <0, 0, -0.2>, <27, 27, 0.2> texture { Img("tex/sticky.png", 27, 27) } rotate z*-5 translate <BX0 + 136, BY0 + 16, 395.3> }
 sphere { <BX0 + 150, BY0 + 42, 393.8>, 1.6 texture { T_Red } }
+// the ledge under it, with what the board scene has on it, shrunk to this
+// board: the board scene's board is 660 wide
+union {
+  object { LedgeShelf } object { LedgeStamp } object { LedgeClock } object { LedgeEraser }
+  object { LedgeBin } object { LedgePen } object { LedgeToy }
+  translate <0, 0, -4> scale (BX1 - BX0) / 660 translate <(BX0 + BX1) / 2, BY0, 392>
+}
 Hot(HotBoard)
 }
 
@@ -402,7 +455,6 @@ sphere { <253, 211, 399>, 1.2 texture { T_Chrome } }
 // The Metropolitan, nosing in
 // ---------------------------------------------------------------------------
 
-#include "metropolitan.inc"
 object { Metropolitan scale 0.95 rotate y*-28 translate <150, 0, 240> Hot(HotCar) }
 
 // the pendant lamp, which can be switched off
