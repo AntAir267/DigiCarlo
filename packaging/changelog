@@ -1,3 +1,19 @@
+digicarlo (1.5.0-1) unstable; urgency=low
+
+  * Night falls in the garage: from sunset to sunrise, worked out for where
+    the computer is, the window shows stars and moonlight, and the garage
+    fades into it as the sun goes down. Set "location" under [window] if
+    the time zone's city is too far off.
+  * The desk lamp on the bench switches off and on.
+  * The way back from the Photo Board is a toy Metropolitan on the ledge,
+    and the garage shows the ledge's tools on a shelf under the board.
+  * The car wears a 1957 Illinois plate, white on red, saying CARLO.
+  * Fixed: the crate of originals sat through the bench's lower shelf, the
+    darkroom door showed daylight round its edges, and the parking lights
+    cut into the headlight rims.
+
+ -- AntAir267 <185841325+AntAir267@users.noreply.github.com>  Tue, 10 Nov 2026 12:00:00 +0000
+
 digicarlo (1.4.0-1) unstable; urgency=low
 
   * The car in the garage is now a 1957 Metropolitan 1500 hardtop, modelled

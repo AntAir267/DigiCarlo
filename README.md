@@ -22,7 +22,7 @@ of shots can be given a date of its own instead.
 
 ```bash
 ./packaging/build-deb.sh
-sudo apt install ./packaging/digicarlo_1.4.0-1_all.deb
+sudo apt install ./packaging/digicarlo_1.5.0-1_all.deb
 ```
 
 That brings in what it needs — `exiftool` to write dates, `ffmpeg` to remux
