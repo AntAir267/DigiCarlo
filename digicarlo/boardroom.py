@@ -3,7 +3,7 @@ on the ledge and the radio's keys do to them.
 
     click a print          pick it (Shift: a run of them, Ctrl: one more)
     click a session card   pick the whole session
-    double-click a print   see it big
+    double-click a print   see it big (and turn it there)
     date stamp             start the picked shots at a date you give
     alarm clock            keep the camera's own dates
     eraser                 back to automatic: dated when they came off
@@ -436,7 +436,19 @@ class BoardRoom:
             entries.append(("Shot %d, %s" % (s.number, timeplan.fmt(self.plan.times[s.key])),
                             self.win.arc.abspath(rec.get("path", "")), rec.get("kind"),
                             e.rotate if e else 0))
-        Viewer(self.win, entries, 0, load_picture).exec()
+        turned = {}                     # shot number -> net quarters turned while viewing
+
+        def turn(i, quarters):
+            s = shots[i]
+            self.win.board.rotate({s.key}, quarters)
+            turned[s.number] = (turned.get(s.number, 0) + quarters) % 4
+            self.pic.invalidate()
+            e = self.win.board.edits.get(s.key)
+            return e.rotate if e else 0
+        Viewer(self.win, entries, 0, load_picture, turn).exec()
+        moved = [n for n, q in turned.items() if q]
+        if moved:
+            self._changed("Turned %s in the viewer." % describe_numbers(moved))
 
     def rotate(self, quarters=1):
         shots = self._need_picks()

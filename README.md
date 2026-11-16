@@ -22,7 +22,7 @@ of shots can be given a date of its own instead.
 
 ```bash
 ./packaging/build-deb.sh
-sudo apt install ./packaging/digicarlo_1.5.0-1_all.deb
+sudo apt install ./packaging/digicarlo_1.5.1-1_all.deb
 ```
 
 That brings in what it needs — `exiftool` to write dates, `ffmpeg` to remux
@@ -238,7 +238,7 @@ counter shows how many shots are waiting, and START puts them in the library
 
 | At the board | What it does |
 | --- | --- |
-| VIEW | The picked shots big, one at a time |
+| VIEW | The picked shots big, one at a time, with buttons to turn each a quarter left or right |
 | ROTATE | A quarter turn to the right |
 | NAME | A title, such as "Grandma's birthday", written as the title and description Google Photos shows |
 | PLACE | Where they were taken: GPS coordinates from a saved place, or a new one pasted from a map |

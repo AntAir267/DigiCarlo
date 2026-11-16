@@ -1,3 +1,10 @@
+digicarlo (1.5.1-1) unstable; urgency=low
+
+  * The photo viewer has Turn left and Turn right buttons. A turn is kept
+    like the ROTATE key's: the print turns too, and UNDO takes it back.
+
+ -- AntAir267 <185841325+AntAir267@users.noreply.github.com>  Sun, 15 Nov 2026 12:00:00 +0000
+
 digicarlo (1.5.0-1) unstable; urgency=low
 
   * Night falls in the garage: from sunset to sunrise, worked out for where

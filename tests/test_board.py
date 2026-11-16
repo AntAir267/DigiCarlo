@@ -305,6 +305,38 @@ class BoardWindowTests(TempDirs):
         self.assertEqual(self.win.board.edits.get(self.keys[0], edits.Edit()).rotate, 0)
         self.assertIn("UNDID", " ".join(self.win.screen_lines()))
 
+    def test_the_viewer_turns_shots(self):
+        self.br.selected = {self.keys[0], self.keys[1]}
+        seen = {}
+
+        def use(dlg):
+            self.assertTrue(dlg.left.isVisibleTo(dlg) or not dlg.isVisible())
+            dlg.right.click()
+            dlg.right.click()                     # the first, half round
+            seen["first"] = dlg.canvas.quarters
+            dlg.show_entry(1)
+            dlg.left.click()                      # the second, a quarter left
+            seen["second"] = dlg.canvas.quarters
+            dlg.show_entry(0)
+            seen["back"] = dlg.canvas.quarters    # remembered on the way back
+            return QDialog.DialogCode.Accepted
+        self.patch(self.dialogs.Viewer, "exec", use)
+        self.win.push_key(1)                      # VIEW
+        self.assertEqual(seen, {"first": 2, "second": 3, "back": 2})
+        self.assertEqual(self.win.board.edits[self.keys[0]].rotate, 2)
+        self.assertEqual(self.win.board.edits[self.keys[1]].rotate, 3)
+        self.assertIn("TURNED", " ".join(self.win.screen_lines()))
+        self.win.push_key(5)                      # UNDO takes back the last turn
+        self.assertEqual(self.win.board.edits.get(self.keys[1], edits.Edit()).rotate, 0)
+        self.assertEqual(self.win.board.edits[self.keys[0]].rotate, 2)
+
+    def test_the_viewer_has_no_turn_buttons_without_somewhere_to_keep_them(self):
+        dlg = self.dialogs.Viewer(self.win, [("Shot 1", "/nonexistent.jpg", "still", 0)])
+        self.assertTrue(dlg.left.isHidden() and dlg.right.isHidden())
+        dlg.turn_entry(1)                         # does nothing
+        self.assertEqual(dlg.canvas.quarters, 0)
+        dlg.deleteLater()
+
     def test_name_and_place(self):
         self.br.selected = {self.keys[4]}
         self.patch(self.dialogs.NameDialog, "exec", lambda dlg: QDialog.DialogCode.Accepted)

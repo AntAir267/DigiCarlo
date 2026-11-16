@@ -5,7 +5,8 @@
     PlaceDialog     where they were taken, from saved places or a new one
     TrustDialog     after a pull from a camera whose clock can be right:
                     which of its sessions to date by the camera
-    Viewer          a shot at full size, stepping through the picked ones
+    Viewer          a shot at full size, stepping through the picked ones,
+                    with buttons to turn it a quarter left or right
     RedEyeDialog    the red-eye pen: each photo with its fixes, to keep,
                     drop, or add to by pointing at an eye
 """
@@ -330,25 +331,41 @@ class Canvas(QWidget):
 
 
 class Viewer(Dialog):
-    """entries: [(caption, path, kind, quarters)], shown one at a time."""
+    """entries: [(caption, path, kind, quarters)], shown one at a time.
 
-    def __init__(self, parent, entries, start=0, loader=None):
+    turn(i, quarters), if given, turns entry i by that many quarters
+    clockwise (-1 is a quarter left) and returns its quarters now; the Turn
+    buttons call it, and are only there with it."""
+
+    def __init__(self, parent, entries, start=0, loader=None, turn=None):
         super().__init__("View", parent)
-        self.entries, self.i, self.loader = entries, start, loader
+        self.entries, self.i, self.loader, self.turn = list(entries), start, loader, turn
+        self.image = QImage()
         self.canvas = Canvas(self)
         self.canvas.setMinimumSize(760, 540)
         self.lay.addWidget(self.canvas, 1)
         row = QHBoxLayout()
         self.prev = QPushButton("< Previous", self)
         self.next = QPushButton("Next >", self)
+        self.left = QPushButton("Turn left", self)
+        self.right = QPushButton("Turn right", self)
         self.open = QPushButton("Open", self)
         self.label = QLabel(self)
-        for b in (self.prev, self.next):
+        for b in (self.prev, self.next, self.left, self.right):
             b.setMinimumWidth(90)
+        self.left.setToolTip("Turn this shot a quarter to the left")
+        self.right.setToolTip("Turn this shot a quarter to the right")
         row.addWidget(self.prev)
         row.addWidget(self.next)
         row.addSpacing(12)
         row.addWidget(self.label, 1)
+        if turn is not None:
+            row.addWidget(self.left)
+            row.addWidget(self.right)
+            row.addSpacing(12)
+        else:
+            self.left.hide()
+            self.right.hide()
         row.addWidget(self.open)
         close = QPushButton("Close", self)
         close.clicked.connect(self.accept)
@@ -356,18 +373,29 @@ class Viewer(Dialog):
         self.lay.addLayout(row)
         self.prev.clicked.connect(lambda: self.show_entry(self.i - 1))
         self.next.clicked.connect(lambda: self.show_entry(self.i + 1))
+        self.left.clicked.connect(lambda: self.turn_entry(-1))
+        self.right.clicked.connect(lambda: self.turn_entry(1))
         self.open.clicked.connect(self._open)
         self.show_entry(start)
 
     def show_entry(self, i):
         self.i = max(0, min(len(self.entries) - 1, i))
         caption, path, kind, quarters = self.entries[self.i]
-        img = self.loader(path, kind) if self.loader else QImage(path)
-        self.canvas.set_image(img, quarters, caption="Cannot show this one")
+        self.image = self.loader(path, kind) if self.loader else QImage(path)
+        self.canvas.set_image(self.image, quarters, caption="Cannot show this one")
         self.label.setText("%s   (%d of %d)" % (caption, self.i + 1, len(self.entries)))
         self.prev.setEnabled(self.i > 0)
         self.next.setEnabled(self.i < len(self.entries) - 1)
         self.open.setText("Play" if kind in ("video", media.SIPIX_CLIP) else "Open")
+
+    def turn_entry(self, quarters):
+        """Turn the shot shown a quarter right (1) or left (-1)."""
+        if self.turn is None or not self.entries:
+            return
+        caption, path, kind, _ = self.entries[self.i]
+        now = self.turn(self.i, quarters) % 4
+        self.entries[self.i] = (caption, path, kind, now)
+        self.canvas.set_image(self.image, now, caption="Cannot show this one")
 
     def _open(self):
         path = self.entries[self.i][1]
